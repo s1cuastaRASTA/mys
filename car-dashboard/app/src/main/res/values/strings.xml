@@ -1,0 +1,10 @@
+<resources>
+    <string name="app_name">Car Dashboard</string>
+    <string name="speed_unit">km/h</string>
+    <string name="pitch">Pitch</string>
+    <string name="roll">Roll</string>
+    <string name="open_waze">Open Waze</string>
+    <string name="no_location">No GPS signal</string>
+    <string name="tap_to_play">Tap to play</string>
+    <string name="now_playing">Now playing</string>
+</resources>

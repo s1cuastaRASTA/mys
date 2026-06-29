@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="ic_launcher_background">#1A237E</color>
+    <string name="app_name">Car Dashboard</string>
+    <string name="no_location">No GPS signal</string>
+    <string name="now_playing">Now playing</string>
+    <string name="open_waze">Open Waze</string>
+    <string name="pitch">Pitch</string>
+    <string name="roll">Roll</string>
+    <string name="speed_unit">km/h</string>
+    <string name="tap_to_play">Tap to play</string>
+    <style name="Theme.CarDashboard" parent="android:Theme.Material.NoActionBar">
+        <item name="android:statusBarColor">@android:color/black</item>
+        <item name="android:navigationBarColor">@android:color/black</item>
+    </style>
+</resources>

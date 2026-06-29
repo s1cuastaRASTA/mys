@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Car Dashboard Demo</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0D1117; color: #F0F6FC;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    height: 100vh; width: 100vw; overflow: hidden; user-select: none;
+  }
+  body.light {
+    background: #F0F6FC; color: #0D1117;
+  }
+  .dashboard {
+    display: flex; height: 100vh; width: 100vw; gap: 8px; padding: 8px; padding-bottom: 60px;
+  }
+  .speedo-panel {
+    flex: 0 0 55%; display: flex; align-items: center; justify-content: center; position: relative;
+  }
+  .home-mode .speedo-panel { flex: 0 0 55%; order: 1; }
+  .home-mode .side-panel { order: 2; }
+  .waze-mode .speedo-panel { flex: 0 0 33%; }
+  .waze-mode .side-panel { flex: 1; }
+  .cb-mode .speedo-panel { display: none; }
+  .cb-mode .side-panel { flex: 1; }
+  .clock-top {
+    position: absolute; top: 8px; right: 12px; font-size: 32px; font-weight: 700;
+    opacity: 0.6; letter-spacing: 2px;
+  }
+
+  /* Bottom nav */
+  .bottom-nav {
+    position: fixed; bottom: 0; left: 0; right: 0; height: 56px;
+    display: flex; align-items: center; justify-content: space-around;
+    background: #21262D; z-index: 20;
+  }
+  body.light .bottom-nav { background: #E1E4E8; }
+  .nav-item {
+    flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 4px; cursor: pointer; color: #8B949E; font-size: 11px; gap: 2px;
+    transition: all 0.2s; border: none; background: none;
+  }
+  body.light .nav-item { color: #586069; }
+  .nav-item.active { color: #58A6FF; }
+  .nav-item svg { width: 20px; height: 20px; }
+  .nav-item:hover { opacity: 0.8; }
+
+  .side-panel {
+    flex: 1; background: #161B22; border-radius: 16px; display: flex; flex-direction: column; overflow: hidden;
+  }
+  body.light .side-panel { background: #FFFFFF; }
+  .tab-content { flex: 1; display: flex; overflow: hidden; }
+  .tab-pane { display: none; width: 100%; height: 100%; }
+  .tab-pane.active { display: flex; }
+
+  /* Speedometer */
+  .speedo-container { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; position: relative; }
+  .digital-speedo { text-align: center; }
+  .speed-number { font-size: clamp(64px, 18vw, 180px); font-weight: 900; letter-spacing: 4px; line-height: 1; transition: color 0.3s ease; }
+  .speed-label { font-size: clamp(18px, 4vw, 38px); color: #8B949E; font-weight: 500; margin-top: 8px; letter-spacing: 2px; }
+  body.light .speed-label { color: #586069; }
+  .speed-bar-track { width: clamp(120px, 40vw, 360px); height: 8px; background: rgba(255,255,255,0.08); border-radius: 4px; margin: 24px auto 0; overflow: hidden; }
+  body.light .speed-bar-track { background: rgba(0,0,0,0.08); }
+  .speed-bar-fill { height: 100%; border-radius: 4px; width: 0%; transition: width 0.3s ease, background 0.3s ease; }
+
+  /* Inclinometer */
+  .incl-panel { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; padding: 16px; gap: 16px; }
+  .incl-title { font-size: 22px; font-weight: 700; color: #F0F6FC; }
+  body.light .incl-title { color: #0D1117; }
+  .incl-visual { position: relative; width: 180px; height: 180px; }
+  .incl-circle { width: 100%; height: 100%; border-radius: 50%; border: 2px solid #30363D; background: #21262D; position: relative; overflow: hidden; }
+  body.light .incl-circle { border-color: #D0D7DE; background: #F6F8FA; }
+  .incl-crosshair { position: absolute; top: 50%; left: 50%; width: 80%; height: 2px; background: #30363D; transform: translate(-50%, -50%); }
+  body.light .incl-crosshair { background: #D0D7DE; }
+  .incl-crosshair.vert { width: 2px; height: 80%; }
+  .incl-dot { position: absolute; width: 24px; height: 24px; border-radius: 50%; background: #58A6FF; transform: translate(-50%, -50%); transition: all 0.15s ease-out; box-shadow: 0 0 12px rgba(88,166,255,0.5); }
+  .incl-dot-inner { position: absolute; top: 50%; left: 50%; width: 10px; height: 10px; border-radius: 50%; background: #0D1117; transform: translate(-50%, -50%); }
+  .incl-center-dot { position: absolute; top: 50%; left: 50%; width: 8px; height: 8px; border-radius: 50%; background: #58A6FF; transform: translate(-50%, -50%); }
+  .incl-values { display: flex; gap: 32px; text-align: center; }
+  .incl-label { font-size: 13px; color: #8B949E; }
+  body.light .incl-label { color: #586069; }
+  .incl-val { font-size: 28px; font-weight: 700; }
+  .incl-val.ok { color: #3FB950; }
+  .incl-val.warn { color: #F85149; }
+
+  /* Waze */
+  .waze-panel { width: 100%; height: 100%; display: flex; flex-direction: column; padding: 8px; gap: 8px; }
+  .waze-btn { display: flex; align-items: center; justify-content: center; gap: 8px; background: #58A6FF; color: #0D1117; border: none; border-radius: 8px; padding: 14px; font-size: 15px; font-weight: 600; cursor: pointer; transition: background 0.2s; }
+  .waze-btn:hover { background: #79C0FF; }
+  .waze-map { flex: 1; background: #1C2128; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #8B949E; font-size: 14px; overflow: hidden; position: relative; }
+  body.light .waze-map { background: #F6F8FA; }
+  .waze-fallback { text-align: center; padding: 20px; color: #8B949E; font-size: 14px; }
+  .waze-fallback svg { width: 48px; height: 48px; margin-bottom: 8px; opacity: 0.5; }
+
+  /* Radio */
+  .radio-panel { width: 100%; padding: 8px; display: flex; flex-direction: column; }
+  .radio-title { font-size: 22px; font-weight: 700; color: #F0F6FC; margin-bottom: 8px; }
+  body.light .radio-title { color: #0D1117; }
+  .radio-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
+  .radio-item { display: flex; align-items: center; gap: 12px; padding: 14px 16px; background: #1C2128; border-radius: 12px; cursor: pointer; transition: all 0.2s; }
+  body.light .radio-item { background: #F6F8FA; }
+  .radio-item:hover { background: #21262D; }
+  body.light .radio-item:hover { background: #E1E4E8; }
+  .radio-item.active { background: rgba(88,166,255,0.15); }
+  .radio-item.active .station-name { color: #58A6FF; font-weight: 700; }
+  .radio-icon { width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; }
+  .radio-icon svg { width: 20px; height: 20px; }
+  .radio-item:not(.active) .radio-icon svg { opacity: 0.5; }
+  .station-name { flex: 1; font-size: 16px; color: #F0F6FC; }
+  body.light .station-name { color: #0D1117; }
+  .play-indicator { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+  .play-indicator.play { background: rgba(63,185,80,0.2); }
+  .play-indicator.pause { background: rgba(248,81,73,0.2); }
+
+  @keyframes pulse { 0%,100% { opacity:0.4; } 50% { opacity:1; } }
+  .eq-bars { display: flex; gap: 2px; align-items: center; height: 20px; }
+  .eq-bar { width: 3px; background: #58A6FF; border-radius: 2px; animation: eq 0.6s ease-in-out infinite alternate; }
+  .eq-bar:nth-child(1) { height: 8px; animation-delay: 0s; }
+  .eq-bar:nth-child(2) { height: 16px; animation-delay: 0.15s; }
+  .eq-bar:nth-child(3) { height: 10px; animation-delay: 0.3s; }
+  .eq-bar:nth-child(4) { height: 14px; animation-delay: 0.1s; }
+  @keyframes eq { 0% { height: 4px; } 100% { height: 20px; } }
+
+  .status-text { text-align: center; font-size: 13px; color: #8B949E; padding: 8px; }
+  body.light .status-text { color: #586069; }
+  .status-text.playing { color: #3FB950; }
+  .radio-list::-webkit-scrollbar { width: 4px; }
+  .radio-list::-webkit-scrollbar-thumb { background: #30363D; border-radius: 4px; }
+  .radio-list::-webkit-scrollbar-track { background: transparent; }
+
+  /* Bord panel */
+  .bord-panel { display: flex; flex-direction: column; align-items: center; width: 100%; padding: 12px; gap: 8px; }
+  .bord-title { font-size: 22px; font-weight: 700; color: #F0F6FC; }
+  body.light .bord-title { color: #0D1117; }
+  .bord-row { display: flex; width: 100%; justify-content: space-around; align-items: center; }
+  .compass-wrap { text-align: center; }
+  .compass-circle { width: 100px; height: 100px; border-radius: 50%; border: 2px solid #30363D; position: relative; margin: 0 auto; }
+  body.light .compass-circle { border-color: #D0D7DE; }
+  .compass-arrow { position: absolute; top: 50%; left: 50%; width: 2px; height: 40%; background: #F85149; transform-origin: bottom center; transform: translateX(-50%) rotate(0deg); bottom: 50%; }
+  .compass-center { position: absolute; top: 50%; left: 50%; width: 8px; height: 8px; border-radius: 50%; background: #58A6FF; transform: translate(-50%, -50%); }
+  .compass-label { font-size: 16px; font-weight: 700; color: #58A6FF; margin-top: 4px; }
+  .gps-coords { text-align: center; }
+  .gps-coords div { font-size: 13px; color: #F0F6FC; }
+  body.light .gps-coords div { color: #0D1117; }
+  .bord-stat { text-align: center; }
+  .bord-stat-label { font-size: 13px; color: #8B949E; }
+  body.light .bord-stat-label { color: #586069; }
+  .bord-stat-val { font-size: 22px; font-weight: 700; color: #3FB950; }
+
+  /* Settings overlay */
+  .settings-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: none; align-items: center; justify-content: center; z-index: 30; }
+  .settings-overlay.open { display: flex; }
+  .settings-box { background: #161B22; border-radius: 16px; padding: 20px; min-width: 300px; }
+  body.light .settings-box { background: #FFFFFF; }
+  .settings-title { font-size: 18px; font-weight: 700; color: #F0F6FC; display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+  body.light .settings-title { color: #0D1117; }
+  .settings-title button { background: none; border: none; color: #8B949E; cursor: pointer; font-size: 20px; }
+  .setting-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; color: #F0F6FC; }
+  body.light .setting-row { color: #0D1117; }
+  .toggle-switch { width: 44px; height: 24px; border-radius: 12px; background: #30363D; cursor: pointer; position: relative; transition: background 0.2s; }
+  .toggle-switch.on { background: #58A6FF; }
+  .toggle-switch::after { content: ''; position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; border-radius: 50%; background: #F0F6FC; transition: transform 0.2s; }
+  .toggle-switch.on::after { transform: translateX(20px); }
+  .timeout-row { display: flex; gap: 4px; margin-top: 8px; }
+  .timeout-btn { flex: 1; padding: 8px 4px; border: none; border-radius: 6px; background: #21262D; color: #F0F6FC; cursor: pointer; font-size: 11px; }
+  body.light .timeout-btn { background: #E1E4E8; color: #0D1117; }
+  .timeout-btn.active { background: #58A6FF; }
+
+  /* Controls */
+  .sim-controls { position: fixed; bottom: 62px; left: 50%; transform: translateX(-50%); background: #161B22; border-radius: 12px; padding: 6px 12px; display: flex; gap: 8px; align-items: center; border: 1px solid #21262D; z-index: 15; }
+  body.light .sim-controls { background: #FFFFFF; border-color: #E1E4E8; }
+  .sim-controls label { color: #8B949E; font-size: 11px; }
+  body.light .sim-controls label { color: #586069; }
+  .sim-controls input[type="range"] { width: 100px; accent-color: #58A6FF; }
+  .sim-btn { background: #21262D; border: 1px solid #30363D; color: #F0F6FC; padding: 4px 10px; border-radius: 6px; cursor: pointer; font-size: 11px; }
+  body.light .sim-btn { background: #E1E4E8; border-color: #D0D7DE; color: #0D1117; }
+  .sim-btn:hover { background: #30363D; }
+  body.light .sim-btn:hover { background: #D0D7DE; }
+
+  @media (max-width: 600px) {
+    .dashboard { flex-direction: column; padding-bottom: 56px; gap: 4px; padding: 4px; padding-bottom: 56px; }
+    .speedo-panel { flex: 0 0 45%; }
+    .side-panel { flex: 1; }
+    .clock-top { font-size: 24px; }
+    .sim-controls { flex-wrap: wrap; justify-content: center; width: 95%; bottom: 60px; padding: 4px 8px; gap: 4px; }
+    .sim-controls input[type="range"] { width: 70px; }
+    .incl-visual { width: 120px; height: 120px; }
+    .incl-val { font-size: 20px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="dashboard">
+  <div class="speedo-panel">
+    <div class="clock-top" id="clockDisplay">00:00</div>
+    <div class="speedo-container">
+      <div class="digital-speedo">
+        <div class="speed-number" id="speedDisplay">0</div>
+        <div class="speed-label" id="unitLabel">km/h</div>
+        <div class="speed-bar-track"><div class="speed-bar-fill" id="speedBar"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="side-panel">
+    <div class="tab-content">
+      <div class="tab-pane active" id="pane0" style="flex-direction:column; padding:12px;">
+        <div style="flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center;">
+          <div class="incl-title" style="margin-bottom:6px;">Meteo</div>
+          <div id="weatherDisplay" style="font-size:56px; margin:4px 0;">⏳</div>
+          <div id="weatherCond" style="font-size:18px; color:#58A6FF; font-weight:700; margin-bottom:2px;">Se încarcă...</div>
+          <div id="weatherTemp" style="font-size:48px; font-weight:900;">--°C</div>
+          <div style="display:flex; gap:16px; margin-top:8px;">
+            <div style="text-align:center;"><div style="font-size:11px; color:#8B949E;">Real Feel</div><div id="weatherFeel" style="font-size:16px; font-weight:700;">--°C</div></div>
+            <div style="text-align:center;"><div style="font-size:11px; color:#8B949E;">Umiditate</div><div id="weatherHum" style="font-size:16px; font-weight:700;">--%</div></div>
+            <div style="text-align:center;"><div style="font-size:11px; color:#8B949E;">Vânt</div><div id="weatherWind" style="font-size:16px; font-weight:700;">-- km/h</div></div>
+          </div>
+        </div>
+        <div id="homeRadio" style="background:rgba(88,166,255,0.08); border-radius:12px; padding:10px; margin-top:4px;">
+          <div style="display:flex; align-items:center; justify-content:space-between;">
+            <div style="display:flex; align-items:center; gap:8px; cursor:pointer;" onclick="if (stations.length>0) playRadio(document.querySelectorAll('.radio-item')[0],0);">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#8B949E" stroke-width="2"><circle cx="12" cy="12" r="2"/><path d="M16.24 7.76a6 6 0 0 1 0 8.49m-8.48-.01a6 6 0 0 1 0-8.49m11.31-2.82a10 10 0 0 1 0 14.14m-14.14 0a10 10 0 0 1 0-14.14"/></svg>
+              <div><div style="font-size:11px; color:#8B949E;">Radio</div><div id="homeRadioName" style="font-size:14px; font-weight:700; color:#8B949E;">Atinge pentru a reda</div></div>
+            </div>
+            <div style="display:flex; gap:4px;">
+              <div id="homeRadioNext" style="display:none; cursor:pointer; padding:4px;" onclick="nextRadio()">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="#58A6FF"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
+              </div>
+              <div id="homeRadioBtn" style="display:none; cursor:pointer; padding:4px;" onclick="nextRadio()">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="#F85149"><circle cx="12" cy="12" r="10"/><rect x="8" y="8" width="8" height="8" rx="1"/></svg>
+              </div>
+              <div id="homeRadioPlay" style="cursor:pointer; padding:4px;" onclick="if (stations.length>0) playRadio(document.querySelectorAll('.radio-item')[0],0);">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="#3FB950"><path d="M8 5v14l11-7z"/></svg>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-pane" id="pane1">
+        <div class="waze-panel">
+          <button class="waze-btn" onclick="alert('Pe tabletă s-ar deschide Waze.\nAici e doar un demo vizual.')">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+            Deschide Waze
+          </button>
+          <div class="waze-map">
+            <div class="waze-fallback">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20.5 3l-.16.03L15 5.1 9 3 3.36 4.9c-.21.07-.36.25-.36.48V20.5c0 .28.22.5.5.5l.16-.03L9 18.9l6 2.1 5.64-1.9c.21-.07.36-.25.36-.48V3.5c0-.28-.22-.5-.5-.5zM15 19l-6-2.11V5l6 2.11V19z"/></svg>
+              <div>Hartă Waze Live</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-pane" id="pane2">
+        <div class="radio-panel">
+          <div class="radio-title">Posturi Radio</div>
+          <div class="radio-list" id="radioList"></div>
+          <div class="status-text" id="radioStatus">Atinge un post pentru a asculta</div>
+        </div>
+      </div>
+
+      <div class="tab-pane" id="pane3" style="gap:8px;">
+        <div class="cb-detail" id="cbDetailPane" style="flex:0 0 40%; background:#161B22; border-radius:16px; display:flex; align-items:center; justify-content:center; margin:8px; flex-direction:column;">
+          <div id="cbDetailContent" style="text-align:center; color:#8B949E;">Atinge un canal<br>pentru detalii</div>
+        </div>
+        <div style="flex:1; display:flex; flex-direction:column; padding:8px; gap:6px;">
+          <div style="font-size:22px; font-weight:700; color:#F0F6FC;">CB Radio (27 MHz)</div>
+          <div style="height:160px; background:#0D1117; border-radius:8px; overflow:hidden;">
+            <iframe id="cbSdr" src="http://websdr.ewi.utwente.nl:8901/?tune=27225" style="width:100%;height:100%;border:none;"></iframe>
+          </div>
+          <div style="flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:4px;" id="cbList"></div>
+        </div>
+      </div>
+
+      <div class="tab-pane" id="pane4" style="flex-direction:column; padding:16px;">
+        <div class="incl-title" style="margin-bottom:12px;">Aplicații</div>
+        <div id="appGrid" style="display:grid; grid-template-columns:1fr 1fr; gap:8px; flex:1; align-content:start;"></div>
+      </div>
+
+      <div class="tab-pane" id="pane5">
+        <div class="incl-panel">
+          <div class="incl-title">Inclinație 4x4</div>
+          <div class="incl-visual">
+            <div class="incl-circle">
+              <div class="incl-crosshair"></div>
+              <div class="incl-crosshair vert"></div>
+              <div class="incl-center-dot"></div>
+              <div class="incl-dot" id="inclDot"><div class="incl-dot-inner"></div></div>
+            </div>
+          </div>
+          <div class="incl-values">
+            <div><div class="incl-label">Pitch (față-spate)</div><div class="incl-val ok" id="pitchDisplay">0°</div></div>
+            <div><div class="incl-label">Roll (stânga-dreapta)</div><div class="incl-val ok" id="rollDisplay">0°</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Bottom Nav -->
+<div class="bottom-nav" id="bottomNav">
+  <div class="nav-item active" data-tab="0" onclick="switchTab(0)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+    <span>Acasă</span>
+  </div>
+  <div class="nav-item" data-tab="1" onclick="switchTab(1)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+    <span>Waze</span>
+  </div>
+  <div class="nav-item" data-tab="2" onclick="switchTab(2)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="2"/><path d="M16.24 7.76a6 6 0 0 1 0 8.49m-8.48-.01a6 6 0 0 1 0-8.49m11.31-2.82a10 10 0 0 1 0 14.14m-14.14 0a10 10 0 0 1 0-14.14"/></svg>
+    <span>Radio</span>
+  </div>
+  <div class="nav-item" data-tab="3" onclick="switchTab(3)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/><rect x="2" y="2" width="20" height="20" rx="2"/></svg>
+    <span>CB</span>
+  </div>
+  <div class="nav-item" data-tab="4" onclick="switchTab(4)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    <span>APP</span>
+  </div>
+  <div class="nav-item" onclick="openSettings()" style="flex:1;">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    <span>Setări</span>
+  </div>
+</div>
+
+<!-- Settings Overlay -->
+<div class="settings-overlay" id="settingsOverlay">
+  <div class="settings-box">
+    <div class="settings-title">
+      Setări
+      <button onclick="closeSettings()">✕</button>
+    </div>
+    <div class="setting-row">
+      <span>Temă închisă</span>
+      <div class="toggle-switch on" id="themeToggle" onclick="toggleTheme()"></div>
+    </div>
+    <div class="setting-row">
+      <span>Unități mph</span>
+      <div class="toggle-switch" id="unitToggle" onclick="toggleUnit()"></div>
+    </div>
+    <div class="setting-row" style="flex-direction:column; align-items:flex-start; gap:8px;">
+      <span style="font-size:13px; color:#8B949E;">Economisitor baterie</span>
+      <div class="timeout-row" id="timeoutRow">
+        <div class="timeout-btn active" data-val="0" onclick="setScreenTimeout(0, this)">Niciodată</div>
+        <div class="timeout-btn" data-val="1" onclick="setScreenTimeout(1, this)">1 min</div>
+        <div class="timeout-btn" data-val="5" onclick="setScreenTimeout(5, this)">5 min</div>
+        <div class="timeout-btn" data-val="10" onclick="setScreenTimeout(10, this)">10 min</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Sim controls -->
+<div class="sim-controls">
+  <label>Viteză:</label>
+  <input type="range" id="speedSlider" min="0" max="220" value="0" oninput="updateSpeed(this.value)">
+  <span id="sliderValue" style="font-weight:bold; min-width:35px;font-size:13px;">0</span>
+  <label>Pitch:</label>
+  <input type="range" id="pitchSlider" min="-30" max="30" value="0" style="width:70px;" oninput="updateTilt()">
+  <label>Roll:</label>
+  <input type="range" id="rollSlider" min="-30" max="30" value="0" style="width:70px;" oninput="updateTilt()">
+  <button class="sim-btn" onclick="toggleAuto()" id="autoBtn">▶ Auto</button>
+</div>
+
+<script>
+const stations = ["Radio ZU","Kiss FM","Europa FM","Virgin Radio","Digi FM","Pro FM","RFI România","Magic FM"];
+
+const cbChannels = [
+  {num:1,freq:"26.965 MHz",name:"CH1",usage:"Utilizare generală",mod:"AM/FM",info:"Canal de bază pentru convorbiri locale."},
+  {num:4,freq:"27.005 MHz",name:"CH4",usage:"Apel local",mod:"AM/FM",info:"Folosit pentru apeluri între stații locale."},
+  {num:9,freq:"27.065 MHz",name:"CH9",usage:"Urgență / SOS",mod:"AM",info:"Canal de urgență — monitorizat de voluntari."},
+  {num:10,freq:"27.075 MHz",name:"CH10",usage:"Info trafic",mod:"FM",info:"Informații rutiere și condiții de trafic."},
+  {num:14,freq:"27.125 MHz",name:"CH14",usage:"Canal de apel",mod:"FM",info:"Canal de start pentru apeluri noi."},
+  {num:15,freq:"27.135 MHz",name:"CH15",usage:"General (Europa)",mod:"AM/FM",info:"Standard european pentru uz general."},
+  {num:19,freq:"27.185 MHz",name:"CH19",usage:"Internațional camioane",mod:"AM",info:"Canalul șoferilor de camion — trafic și semnalări."},
+  {num:22,freq:"27.225 MHz",name:"CH22",usage:"Info trafic România",mod:"FM",info:"⭐ Cel mai folosit în România — informații trafic."},
+  {num:24,freq:"27.245 MHz",name:"CH24",usage:"Utilizare generală",mod:"AM/FM",info:"Conversații locale și regionale."},
+  {num:30,freq:"27.305 MHz",name:"CH30",usage:"Utilizare generală",mod:"AM/FM",info:"Alternativă când canalele principale sunt ocupate."},
+  {num:35,freq:"27.355 MHz",name:"CH35",usage:"Utilizare generală",mod:"AM/FM",info:"Folosit des în zone rurale."},
+  {num:40,freq:"27.405 MHz",name:"CH40",usage:"Utilizare generală",mod:"AM/FM",info:"Ultimul canal din banda CB — mai puțin aglomerat."},
+];
+
+let currentTab = 0;
+let currentRadio = -1;
+let autoInterval = null;
+let useMph = false;
+let isDarkTheme = true;
+let heading = 0;
+let tripSeconds = 0;
+let tripDist = 0;
+let simLat = 45.00000;
+let simLon = 25.00000;
+
+// Init radio list
+  // APP grid menu
+  const appItems = [
+    {label:'Acas\u0103', icon:'home', tab:0},
+    {label:'4x4', icon:'sensors', tab:5},
+    {label:'Waze', icon:'waze', tab:2},
+    {label:'Radio', icon:'radio', tab:3},
+    {label:'CB', icon:'radio', tab:4},
+    {label:'Set\u0103ri', icon:'settings', tab:-1},
+  ];
+  function buildAppGrid(containerId) {
+    const grid = document.getElementById(containerId);
+    if (!grid) return;
+    appItems.forEach(item => {
+      const div = document.createElement('div');
+      div.style.cssText = 'display:flex; flex-direction:column; align-items:center; justify-content:center; aspect-ratio:1; background:#21262D; border-radius:12px; cursor:pointer; padding:8px;';
+      div.onclick = () => { if (item.tab < 0) openSettings(); else switchTab(item.tab); };
+      const iconSvg = item.icon === 'sensors'
+        ? '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#58A6FF" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>'
+        : item.icon === 'waze'
+        ? '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#58A6FF" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>'
+        : item.icon === 'home'
+        ? '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#58A6FF" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>'
+        : '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#58A6FF" stroke-width="2"><circle cx="12" cy="12" r="2"/><path d="M16.24 7.76a6 6 0 0 1 0 8.49m-8.48-.01a6 6 0 0 1 0-8.49m11.31-2.82a10 10 0 0 1 0 14.14m-14.14 0a10 10 0 0 1 0-14.14"/></svg>';
+      div.innerHTML = iconSvg + '<span style="color:#F0F6FC;font-size:14px;margin-top:4px;text-align:center;">'+item.label+'</span>';
+      grid.appendChild(div);
+    });
+  }
+  buildAppGrid('appGrid');
+
+  // Weather fetch
+  async function fetchWeather(lat, lon) {
+    try {
+      const resp = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m&timezone=auto`);
+      const data = await resp.json();
+      const c = data.current;
+      const codes = {0:'☀️',1:'🌤',2:'⛅',3:'☁️',45:'🌫',48:'🌫',51:'💧',53:'💧',55:'💧',61:'🌦',63:'🌦',65:'🌧',71:'❄️',73:'❄️',75:'❄️',80:'🌦',81:'🌦',82:'🌧',95:'⚡',96:'⚡',99:'⚡'};
+      const conds = {0:'Senin',1:'Predominant senin',2:'Parțial noros',3:'Acoperit',45:'Ceață',48:'Ceață',51:'Burniță',53:'Burniță',55:'Burniță',61:'Ploaie ușoară',63:'Ploaie moderată',65:'Ploaie abundentă',71:'Ninsoare',73:'Ninsoare',75:'Ninsoare',80:'Averse',81:'Averse',82:'Averse',95:'Furtună',96:'Furtună',99:'Furtună'};
+      const wc = c.weather_code;
+      document.getElementById('weatherDisplay').textContent = codes[wc] || '🌡️';
+      document.getElementById('weatherCond').textContent = conds[wc] || 'Necunoscut';
+      document.getElementById('weatherTemp').textContent = Math.round(c.temperature_2m) + '°C';
+      document.getElementById('weatherFeel').textContent = Math.round(c.apparent_temperature) + '°C';
+      document.getElementById('weatherHum').textContent = c.relative_humidity_2m + '%';
+      document.getElementById('weatherWind').textContent = Math.round(c.wind_speed_10m) + ' km/h';
+      const tempColor = c.temperature_2m > 30 ? '#F85149' : c.temperature_2m < 5 ? '#58A6FF' : '#D29922';
+      document.getElementById('weatherTemp').style.color = tempColor;
+    } catch(e) {
+      document.getElementById('weatherCond').textContent = 'Eroare conexiune';
+    }
+  }
+  // Simulate GPS coords for demo
+  let meteoLat = 45.0, meteoLon = 25.0;
+  fetchWeather(meteoLat, meteoLon);
+
+  // CB channels
+  const cbList = document.getElementById('cbList');
+  cbChannels.forEach((ch, i) => {
+    const div = document.createElement('div');
+    div.style.cssText = 'display:flex; align-items:center; gap:8px; padding:8px 12px; background:#21262D; border-radius:8px; cursor:pointer;';
+    div.onclick = () => {
+      cbList.querySelectorAll('div').forEach(d => d.style.background = '#21262D');
+      div.style.background = 'rgba(88,166,255,0.15)';
+      document.getElementById('cbDetailContent').innerHTML =
+        '<div style="font-weight:700; color:#58A6FF; font-size:24px; margin-bottom:8px;">' + ch.name + '</div>' +
+        '<div style="color:#F0F6FC; font-size:20px; font-weight:700; margin-bottom:12px;">' + ch.freq + '</div>' +
+        '<div style="background:rgba(88,166,255,0.1); border-radius:12px; padding:12px; margin:0 16px;">' +
+          '<div style="color:#D29922; font-weight:600; font-size:15px; margin-bottom:6px;">' + ch.usage + '</div>' +
+          '<div style="color:#8B949E; font-size:13px;">Modulație: ' + ch.mod + '</div>' +
+          '<div style="color:#F0F6FC; font-size:13px; margin-top:6px;">' + (ch.info || '') + '</div>' +
+        '</div>';
+      const sdr = document.getElementById('cbSdr');
+      if (sdr) sdr.src = 'http://websdr.ewi.utwente.nl:8901/?tune=' + ({
+        1:26965,4:27005,9:27065,10:27075,14:27125,15:27135,19:27185,22:27225,24:27245,30:27305,35:27355,40:27405
+      }[ch.num] || 27225);
+    };
+    div.innerHTML = `<span style="font-weight:700;color:#D29922;font-size:13px;">CH${ch.num}</span>
+                     <span style="color:#8B949E;font-size:12px;">${ch.freq}</span>
+                     <span style="color:#8B949E;font-size:10px;">${ch.mod}</span>
+                     <span style="flex:1;color:#F0F6FC;font-size:14px;">${ch.name}</span>
+                     <span style="color:#8B949E;font-size:11px;">${ch.usage}</span>`;
+    cbList.appendChild(div);
+  });
+
+  const rl = document.getElementById('radioList');
+  stations.forEach((name, i) => {
+  const div = document.createElement('div');
+  div.className = 'radio-item';
+  div.innerHTML = `
+    <div class="radio-icon"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55C7.79 13 6 14.79 6 17s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg></div>
+    <span class="station-name">${name}</span>
+    <div class="play-indicator play" style="display:none;"><svg width="16" height="16" viewBox="0 0 24 24" fill="#3FB950"><path d="M8 5v14l11-7z"/></svg></div>`;
+  div.onclick = () => playRadio(div, i);
+  rl.appendChild(div);
+});
+
+// Clock
+function updateClock() {
+  const now = new Date();
+  document.getElementById('clockDisplay').textContent =
+    String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// Tripmeter
+setInterval(() => {
+  tripSeconds++;
+  const h = Math.floor(tripSeconds / 3600);
+  const m = Math.floor((tripSeconds % 3600) / 60);
+  const s = tripSeconds % 60;
+  document.getElementById('tripTimeDisplay').textContent =
+    String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
+  tripDist += (Math.random() * 2 + 0.5);
+  const distKm = tripDist / 1000;
+  document.getElementById('tripDistDisplay').textContent =
+    distKm < 1 ? Math.round(tripDist) + ' m' : distKm.toFixed(2) + ' km';
+}, 1000);
+
+// Compass sim
+setInterval(() => {
+  heading = (heading + 2) % 360;
+  updateCompass(heading);
+}, 200);
+
+function updateCompass(h) {
+  const arrow = document.getElementById('compassArrow');
+  arrow.style.transform = `translateX(-50%) rotate(${h}deg)`;
+  const cardinal = h < 22.5 || h >= 337.5 ? 'N' : h < 67.5 ? 'NE' : h < 112.5 ? 'E' : h < 157.5 ? 'SE' : h < 202.5 ? 'S' : h < 247.5 ? 'SV' : h < 292.5 ? 'V' : 'NV';
+  document.getElementById('compassDisplay').textContent = Math.round(h) + '° ' + cardinal;
+}
+
+// GPS sim
+setInterval(() => {
+  simLat += (Math.random() - 0.5) * 0.001;
+  simLon += (Math.random() - 0.5) * 0.001;
+  document.getElementById('gpsLat').textContent = simLat.toFixed(5);
+  document.getElementById('gpsLon').textContent = simLon.toFixed(5);
+}, 3000);
+
+function switchTab(idx) {
+  currentTab = idx;
+  document.querySelectorAll('.nav-item').forEach((t,i) => t.classList.toggle('active', i===idx));
+  document.querySelectorAll('.tab-pane').forEach((p,i) => p.classList.toggle('active', i===idx));
+  const dash = document.querySelector('.dashboard');
+  dash.classList.toggle('home-mode', idx === 0);
+  dash.classList.toggle('waze-mode', idx === 1);
+  dash.classList.toggle('cb-mode', idx === 3);
+}
+
+function updateSpeed(val) {
+  const v = parseFloat(val);
+  const isMph = useMph;
+  const displayV = isMph ? v * 0.621371 : v;
+  const speedKmh = v;
+
+  document.getElementById('speedDisplay').textContent = Math.round(displayV);
+  document.getElementById('sliderValue').textContent = Math.round(displayV);
+  document.getElementById('unitLabel').textContent = isMph ? 'mph' : 'km/h';
+
+  let color = '#00E676';
+  if (speedKmh > 50) color = '#FFEA00';
+  if (speedKmh > 90) color = '#FF8C00';
+  if (speedKmh > 130) color = '#FF1744';
+  document.getElementById('speedDisplay').style.color = color;
+  document.getElementById('speedBar').style.background = color;
+  const maxV = isMph ? 140 : 220;
+  document.getElementById('speedBar').style.width = Math.min(100, (displayV / maxV) * 100) + '%';
+
+  const slider = document.getElementById('speedSlider');
+  if (isMph) { slider.max = '140'; } else { slider.max = '220'; }
+}
+
+function updateTilt() {
+  const pitch = parseFloat(document.getElementById('pitchSlider').value);
+  const roll = parseFloat(document.getElementById('rollSlider').value);
+
+  document.getElementById('pitchDisplay').textContent = pitch + '°';
+  document.getElementById('rollDisplay').textContent = roll + '°';
+
+  const pEl = document.getElementById('pitchDisplay');
+  const rEl = document.getElementById('rollDisplay');
+  pEl.className = 'incl-val ' + (Math.abs(pitch) > 15 ? 'warn' : 'ok');
+  rEl.className = 'incl-val ' + (Math.abs(roll) > 15 ? 'warn' : 'ok');
+
+  const dot = document.getElementById('inclDot');
+  const maxOffset = 50;
+  const px = (roll / 30) * maxOffset;
+  const py = (pitch / 30) * maxOffset;
+  dot.style.left = 'calc(50% + ' + px + '%)';
+  dot.style.top = 'calc(50% + ' + py + '%)';
+}
+
+function playRadio(el, idx) {
+  if (currentRadio === idx) {
+    el.classList.remove('active');
+    const ind = el.querySelector('.play-indicator');
+    if (ind) ind.style.display = 'none';
+    currentRadio = -1;
+    document.getElementById('radioStatus').textContent = 'Atinge un post pentru a asculta';
+    document.getElementById('radioStatus').className = 'status-text';
+    document.getElementById('homeRadioName').textContent = 'Atinge pentru a reda';
+    document.getElementById('homeRadioName').style.color = '#8B949E';
+    document.getElementById('homeRadioBtn').style.display = 'none';
+    document.getElementById('homeRadioNext').style.display = 'none';
+    document.getElementById('homeRadioPlay').style.display = 'block';
+    document.getElementById('homeRadio').style.background = 'rgba(88,166,255,0.08)';
+    return;
+  }
+  document.querySelectorAll('.radio-item').forEach(item => {
+    item.classList.remove('active');
+    const ind = item.querySelector('.play-indicator');
+    if (ind) ind.style.display = 'none';
+  });
+  el.classList.add('active');
+  const indicator = el.querySelector('.play-indicator');
+  if (indicator) {
+    indicator.style.display = 'flex';
+    indicator.className = 'play-indicator pause';
+    indicator.innerHTML = '<div class="eq-bars"><div class="eq-bar"></div><div class="eq-bar"></div><div class="eq-bar"></div><div class="eq-bar"></div></div>';
+  }
+  currentRadio = idx;
+  document.getElementById('radioStatus').textContent = 'Acum asculti: ' + stations[idx];
+  document.getElementById('radioStatus').className = 'status-text playing';
+  document.getElementById('homeRadioName').textContent = stations[idx];
+  document.getElementById('homeRadioName').style.color = '#58A6FF';
+  document.getElementById('homeRadioBtn').style.display = 'block';
+  document.getElementById('homeRadioNext').style.display = 'block';
+  document.getElementById('homeRadioPlay').style.display = 'none';
+  document.getElementById('homeRadio').style.background = 'rgba(88,166,255,0.15)';
+}
+
+function nextRadio() {
+  const nextIdx = (currentRadio + 1) % stations.length;
+  playRadio(document.querySelectorAll('.radio-item')[nextIdx], nextIdx);
+}
+
+function toggleAuto() {
+  if (autoInterval) {
+    clearInterval(autoInterval); autoInterval = null;
+    document.getElementById('autoBtn').textContent = '▶ Auto';
+    return;
+  }
+  document.getElementById('autoBtn').textContent = '■ Stop';
+  let dir = 1;
+  autoInterval = setInterval(() => {
+    const slider = document.getElementById('speedSlider');
+    let v = parseFloat(slider.value) + (dir * 5);
+    if (v >= 200) { v = 200; dir = -1; }
+    if (v <= 0) { v = 0; dir = 1; }
+    slider.value = v;
+    updateSpeed(v);
+    const pSlider = document.getElementById('pitchSlider');
+    const rSlider = document.getElementById('rollSlider');
+    pSlider.value = Math.sin(Date.now() / 2000) * 15;
+    rSlider.value = Math.cos(Date.now() / 3000) * 12;
+    updateTilt();
+  }, 100);
+}
+
+// Settings
+function openSettings() { document.getElementById('settingsOverlay').classList.add('open'); }
+function closeSettings() { document.getElementById('settingsOverlay').classList.remove('open'); }
+function toggleTheme() {
+  isDarkTheme = !isDarkTheme;
+  document.getElementById('themeToggle').classList.toggle('on', isDarkTheme);
+  document.body.classList.toggle('light', !isDarkTheme);
+}
+function toggleUnit() {
+  useMph = !useMph;
+  document.getElementById('unitToggle').classList.toggle('on', useMph);
+  const slider = document.getElementById('speedSlider');
+  const v = parseFloat(slider.value);
+  if (useMph) { slider.max = '140'; slider.value = Math.round(v * 0.621371); }
+  else { slider.max = '220'; slider.value = Math.round(v / 0.621371); }
+  updateSpeed(slider.value);
+}
+function setScreenTimeout(val, el) {
+  document.querySelectorAll('.timeout-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+}
+
+// Init
+switchTab(0);
+updateSpeed(0);
+updateTilt();
+</script>
+</body>
+</html>

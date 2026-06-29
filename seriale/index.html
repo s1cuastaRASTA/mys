@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Seriale Online - Las Fierbinti & Camatarii</title>
+    <style>
+        :root {
+            --bg: #0b0b12; --card-bg: #151522; --card-hover: #1e1e32;
+            --accent: #e63946; --accent2: #f72585; --text: #e0e0e0;
+            --text-muted: #7777a0; --border: #252540; --radius: 14px;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: var(--bg); color: var(--text); min-height: 100vh; line-height: 1.5;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .header {
+            background: linear-gradient(135deg, #151528 0%, #0b0b1a 100%);
+            border-bottom: 1px solid var(--border); padding: 14px 16px; text-align: center;
+            position: sticky; top: 0; z-index: 100;
+        }
+        .header h1 {
+            font-size: 1.3rem; font-weight: 800;
+            background: linear-gradient(135deg, var(--accent), #f72585);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+        }
+        .back-bar {
+            display: none; align-items: center; gap: 8px; padding: 10px 16px;
+            background: var(--bg); border-bottom: 1px solid var(--border);
+            position: sticky; top: 52px; z-index: 50;
+        }
+        .back-bar.visible { display: flex; }
+        .back-btn {
+            padding: 6px 14px; border-radius: 16px; border: 1px solid var(--border);
+            background: var(--card-bg); color: var(--text); cursor: pointer; font-size: 0.8rem;
+            font-weight: 600;
+        }
+        .back-btn:hover { border-color: var(--accent); }
+        .back-label { font-size: 0.82rem; color: var(--text-muted); font-weight: 600; }
+
+        .container { max-width: 700px; margin: 0 auto; padding: 14px 16px; }
+
+        /* Series Cards (big buttons) */
+        .series-grid { display: flex; flex-direction: column; gap: 14px; }
+        .series-card {
+            background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius);
+            overflow: hidden; cursor: pointer; transition: all 0.25s;
+        }
+        .series-card:hover, .series-card:active { border-color: var(--accent); transform: translateY(-2px); }
+        .series-banner {
+            height: 120px; display: flex; align-items: center; justify-content: center;
+            position: relative; overflow: hidden;
+        }
+        .series-banner h2 { font-size: 1.6rem; font-weight: 800; color: #fff; position: relative; z-index: 1; }
+        .series-banner .bg-emoji { font-size: 5rem; opacity: 0.12; position: absolute; right: 10px; bottom: -15px; }
+        .series-info {
+            padding: 12px 14px; display: flex; align-items: center; justify-content: space-between; gap: 10px;
+        }
+        .series-info .desc { font-size: 0.78rem; color: var(--text-muted); flex: 1; }
+        .series-info .arrow { font-size: 1.2rem; color: var(--accent); }
+
+        /* Season cards - same style as series cards */
+        .season-grid { display: flex; flex-direction: column; gap: 12px; }
+        .season-card {
+            background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius);
+            overflow: hidden; cursor: pointer; transition: all 0.25s;
+        }
+        .season-card:hover, .season-card:active { border-color: var(--accent); transform: translateY(-2px); }
+        .season-banner {
+            height: 90px; display: flex; align-items: center; justify-content: center;
+            position: relative; overflow: hidden;
+        }
+        .season-banner h3 { font-size: 1.3rem; font-weight: 800; color: #fff; position: relative; z-index: 1; }
+        .season-banner .bg-emoji { font-size: 4rem; opacity: 0.08; position: absolute; right: 10px; bottom: -12px; }
+        .season-info {
+            padding: 10px 14px; display: flex; align-items: center; justify-content: space-between; gap: 10px;
+        }
+        .season-info .s-name { font-size: 0.85rem; font-weight: 700; color: var(--text); }
+        .season-info .s-count { font-size: 0.7rem; color: var(--text-muted); }
+        .season-info .s-arrow { font-size: 1.1rem; color: var(--accent); }
+
+        /* Episodes */
+        .loading-indicator { text-align: center; padding: 40px 20px; color: var(--text-muted); }
+        .spinner {
+            width: 32px; height: 32px; border: 3px solid var(--border); border-top-color: var(--accent);
+            border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 10px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .episode-card {
+            background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px;
+            padding: 13px 14px; margin-bottom: 8px; cursor: pointer; transition: all 0.2s;
+            display: flex; align-items: center; gap: 12px;
+        }
+        .episode-card:hover, .episode-card:active { border-color: var(--accent); background: var(--card-hover); }
+        .ep-num { width: 38px; height: 38px; border-radius: 10px; display: flex; align-items: center;
+            justify-content: center; font-weight: 800; font-size: 0.95rem; color: #fff; flex-shrink: 0; }
+        .ep-info { flex: 1; min-width: 0; }
+        .ep-title { font-size: 0.82rem; font-weight: 700; margin-bottom: 2px; line-height: 1.2; }
+        .ep-meta { font-size: 0.66rem; color: var(--text-muted); }
+        .badge-src { font-size: 0.6rem; background: var(--border); padding: 2px 8px; border-radius: 10px; color: var(--text-muted); }
+        .ep-play { font-size: 1.3rem; flex-shrink: 0; opacity: 0.5; }
+
+        /* Modal */
+        .modal-overlay {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.92); z-index: 1000;
+            display: flex; align-items: center; justify-content: center;
+            opacity: 0; pointer-events: none; transition: opacity 0.25s;
+        }
+        .modal-overlay.active { opacity: 1; pointer-events: all; }
+        .modal {
+            background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius);
+            width: 100%; max-width: 100vw; height: 100vh; overflow: hidden;
+            display: flex; flex-direction: column;
+        }
+        @media (min-width: 768px) { .modal { width: 95%; max-width: 900px; height: auto; max-height: 95vh; } }
+        .modal-header {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 10px 14px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+        }
+        .modal-header h3 { font-size: 0.83rem; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; margin-right: 10px; }
+        .modal-close {
+            width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--border);
+            background: transparent; color: var(--text); cursor: pointer; font-size: 1.1rem;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .modal-close:hover { background: var(--accent); border-color: var(--accent); color: #fff; }
+        .server-btns {
+            display: flex; gap: 6px; padding: 8px 14px; flex-wrap: wrap;
+            border-bottom: 1px solid var(--border); flex-shrink: 0;
+        }
+        .server-btn {
+            padding: 5px 14px; border-radius: 16px; border: 1px solid var(--border);
+            background: var(--bg); color: var(--text-muted); cursor: pointer;
+            font-size: 0.72rem; font-weight: 600; transition: all 0.2s;
+        }
+        .server-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+        .player-wrap {
+            position: relative; width: 100%; aspect-ratio: 16/9;
+            background: #000; min-height: 250px;
+        }
+        .player-wrap iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: none; }
+
+        .footer {
+            text-align: center; padding: 20px; color: var(--text-muted);
+            font-size: 0.68rem; border-top: 1px solid var(--border); margin-top: 16px;
+        }
+        .error-msg { text-align: center; padding: 30px 20px; color: var(--text-muted); }
+
+        @media (max-width: 400px) {
+            .series-banner { height: 100px; }
+            .series-banner h2 { font-size: 1.3rem; }
+            .series-info { flex-direction: column; align-items: flex-start; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="header"><h1>Seriale Online</h1></div>
+<div class="back-bar" id="backBar">
+    <button class="back-btn" id="backBtn">← Inapoi</button>
+    <span class="back-label" id="backLabel"></span>
+</div>
+<div class="container" id="content"></div>
+<div class="footer">
+    <p>Episoadele sunt gazduite pe platforme video publice (VK, Vidmoly, Rumble). Acest site nu gazduieste niciun fisier.</p>
+</div>
+
+<div class="modal-overlay" id="modalOverlay">
+    <div class="modal">
+        <div class="modal-header">
+            <h3 id="modalTitle">Episod</h3>
+            <button class="modal-close" id="modalClose">&times;</button>
+        </div>
+        <div class="server-btns" id="serverBtns"></div>
+        <div class="player-wrap">
+            <iframe id="playerFrame" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>
+        </div>
+    </div>
+</div>
+
+<script>
+const API = 'https://veziaici.net/wp-json/wp/v2';
+
+// Configurare seriale + sezoane
+const SERIES = {
+    fierbinti: {
+        name: 'Las Fierbinti',
+        color: '#c62828',
+        bannerGrad: 'linear-gradient(135deg, #c62828, #e53935)',
+        emoji: '\u{1F3D8}',
+        desc: 'Serial de comedie romanesc. Toate sezoanele si episoadele complete.',
+        catId: 38  // parent category
+    },
+    camatarii: {
+        name: 'Camatarii',
+        color: '#0d47a1',
+        bannerGrad: 'linear-gradient(135deg, #0d47a1, #1565c0)',
+        emoji: '\u{1F3AC}',
+        desc: 'Documentar romanesc. Episoade integrale in reluare din 2026.',
+        catId: 229
+    }
+};
+
+// Cache
+let seasonsCache = {};
+let episodesCache = {};
+let currentView = 'series';  // 'series' | 'seasons' | 'episodes'
+let currentSeriesKey = null;
+let currentSeasonId = null;
+let currentEpisode = null;
+let activeSource = 0;
+
+// ============================================================
+// NAVIGATION
+// ============================================================
+const content = document.getElementById('content');
+const backBar = document.getElementById('backBar');
+const backBtn = document.getElementById('backBtn');
+const backLabel = document.getElementById('backLabel');
+
+function showSeriesList() {
+    currentView = 'series';
+    backBar.classList.remove('visible');
+    let html = '<div class="series-grid">';
+    for (const [key, s] of Object.entries(SERIES)) {
+        html += `
+        <div class="series-card" data-series="${key}">
+            <div class="series-banner" style="background:${s.bannerGrad};">
+                <span class="bg-emoji">${s.emoji}</span>
+                <h2>${s.name}</h2>
+            </div>
+            <div class="series-info">
+                <div class="desc">${s.desc}</div>
+                <span class="arrow">▶</span>
+            </div>
+        </div>`;
+    }
+    html += '</div>';
+    content.innerHTML = html;
+    document.querySelectorAll('.series-card').forEach(card => {
+        card.addEventListener('click', () => showSeasons(card.dataset.series));
+    });
+}
+
+async function showSeasons(seriesKey) {
+    currentView = 'seasons';
+    currentSeriesKey = seriesKey;
+    const s = SERIES[seriesKey];
+    backLabel.textContent = s.name;
+    backBar.classList.add('visible');
+    content.innerHTML = '<div class="loading-indicator"><div class="spinner"></div></div>';
+
+    if (!seasonsCache[seriesKey]) {
+        const resp = await fetch(`${API}/categories?parent=${s.catId}&per_page=50&orderby=id&order=desc`);
+        seasonsCache[seriesKey] = await resp.json();
+    }
+
+    const seasons = seasonsCache[seriesKey];
+    if (!seasons.length) {
+        content.innerHTML = '<div class="error-msg">Niciun sezon gasit.</div>';
+        return;
+    }
+
+    let html = '<div class="season-grid">';
+    const seen = new Set();
+    seasons.forEach(se => {
+        const epCount = se.count || '?';
+        const m = se.name.match(/Sezonul\s+\d+/i);
+        const shortName = m ? m[0] : se.name.replace(/^Las Fie[rl]binti\s+/i, '').replace(/^Camatarii\s+/i, '').replace(/\s+Online.*$/i, '').replace(/\s+[Ii]n\s+[Rr]eluare.*$/i, '').replace(/\s+(Complet|Integral|Episoade|Serial|Romanesc|Online|Compleet).*$/i, '').trim();
+        if (seen.has(shortName)) return;
+        seen.add(shortName);
+        html += `
+        <div class="season-card" data-season-id="${se.id}">
+            <div class="season-banner" style="background:${s.color};">
+                <span class="bg-emoji">📺</span>
+                <h3>${shortName}</h3>
+            </div>
+            <div class="season-info">
+                <span class="s-name">${epCount} episoade</span>
+                <span class="s-arrow">▶</span>
+            </div>
+        </div>`;
+    });
+    html += '</div>';
+    content.innerHTML = html;
+    document.querySelectorAll('.season-card').forEach(card => {
+        card.addEventListener('click', () => showEpisodes(parseInt(card.dataset.seasonId)));
+    });
+}
+
+async function showEpisodes(seasonId) {
+    currentView = 'episodes';
+    currentSeasonId = seasonId;
+    backLabel.textContent = 'Episoade';
+    backBar.classList.add('visible');
+    content.innerHTML = '<div class="loading-indicator"><div class="spinner"></div></div>';
+
+    if (!episodesCache[seasonId]) {
+        const resp = await fetch(`${API}/posts?categories=${seasonId}&per_page=50&orderby=date&order=desc&_fields=id,title,content,date`);
+        const posts = await resp.json();
+        episodesCache[seasonId] = posts.map(p => ({
+            id: p.id,
+            title: p.title.rendered,
+            date: new Date(p.date),
+            sources: extractIframes(p.content.rendered),
+            num: (p.title.rendered.match(/Episodul\s+(\d+)/i) || ['',''])[1]
+        })).filter(ep => ep.sources.length > 0);
+    }
+
+    renderEpisodes(episodesCache[seasonId]);
+}
+
+function renderEpisodes(episodes) {
+    const color = SERIES[currentSeriesKey].color;
+    if (!episodes.length) {
+        content.innerHTML = '<div class="error-msg">Niciun episod gasit.</div>';
+        return;
+    }
+    let html = '';
+    episodes.forEach((ep, i) => {
+        const dateStr = ep.date.toLocaleDateString('ro-RO', { day: 'numeric', month: 'short', year: 'numeric' });
+        const sc = ep.sources.length;
+        html += `
+        <div class="episode-card" data-idx="${i}">
+            <div class="ep-num" style="background:${color}">${ep.num || i+1}</div>
+            <div class="ep-info">
+                <div class="ep-title">${ep.title}</div>
+                <div class="ep-meta">${dateStr} &middot; <span class="badge-src">${sc} surs${sc>1?'e':'a'}</span></div>
+            </div>
+            <div class="ep-play">▶</div>
+        </div>`;
+    });
+    content.innerHTML = html;
+    content.querySelectorAll('.episode-card').forEach(card => {
+        card.addEventListener('click', () => {
+            const idx = parseInt(card.dataset.idx);
+            openPlayer(episodes[idx]);
+        });
+    });
+}
+
+// Back button
+backBtn.addEventListener('click', () => {
+    if (currentView === 'episodes') {
+        showSeasons(currentSeriesKey);
+    } else if (currentView === 'seasons') {
+        showSeriesList();
+    }
+});
+
+// ============================================================
+// HELPERS
+// ============================================================
+function extractIframes(html) {
+    const urls = [];
+    const regex = /<iframe[^>]+src="([^"]+)"/gi;
+    let match;
+    while ((match = regex.exec(html)) !== null) {
+        let url = match[1];
+        url = url.replace(/&#038;/g, '&').replace(/&amp;/g, '&');
+        urls.push(url);
+    }
+    return urls;
+}
+
+// ============================================================
+// PLAYER MODAL
+// ============================================================
+function openPlayer(episode) {
+    currentEpisode = episode;
+    activeSource = 0;
+    document.getElementById('modalTitle').textContent = episode.title;
+    renderServerButtons();
+    loadSource(0);
+    document.getElementById('modalOverlay').classList.add('active');
+    document.body.style.overflow = 'hidden';
+}
+
+function renderServerButtons() {
+    const container = document.getElementById('serverBtns');
+    const sources = currentEpisode.sources;
+    if (sources.length <= 1) { container.innerHTML = ''; return; }
+    container.innerHTML = sources.map((s, i) => {
+        let label = 'Server ' + (i+1);
+        if (s.includes('vkvideo')) label = 'VK';
+        else if (s.includes('vidmoly')) label = 'Vidmoly';
+        else if (s.includes('rumble')) label = 'Rumble';
+        return `<button class="server-btn${i===activeSource?' active':''}" data-idx="${i}">${label}</button>`;
+    }).join('');
+    container.querySelectorAll('.server-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            activeSource = parseInt(btn.dataset.idx);
+            renderServerButtons();
+            loadSource(activeSource);
+        });
+    });
+}
+
+function loadSource(index) {
+    const frame = document.getElementById('playerFrame');
+    if (currentEpisode.sources[index]) frame.src = currentEpisode.sources[index];
+}
+
+function closePlayer() {
+    document.getElementById('modalOverlay').classList.remove('active');
+    document.body.style.overflow = '';
+    setTimeout(() => { document.getElementById('playerFrame').src = ''; }, 300);
+    document.getElementById('serverBtns').innerHTML = '';
+}
+
+document.getElementById('modalClose').addEventListener('click', closePlayer);
+document.getElementById('modalOverlay').addEventListener('click', e => {
+    if (e.target === e.currentTarget) closePlayer();
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closePlayer(); });
+
+// Init
+showSeriesList();
+</script>
+</body>
+</html>
