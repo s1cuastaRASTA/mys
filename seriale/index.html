@@ -101,6 +101,12 @@
         .ep-meta { font-size: 0.66rem; color: var(--text-muted); }
         .badge-src { font-size: 0.6rem; background: var(--border); padding: 2px 8px; border-radius: 10px; color: var(--text-muted); }
         .ep-play { font-size: 1.3rem; flex-shrink: 0; opacity: 0.5; }
+        .ep-watched {
+            font-size: 0.65rem; padding: 2px 8px; border-radius: 10px;
+            background: #1b5e20; color: #4caf50; font-weight: 700; flex-shrink: 0;
+        }
+        .episode-card.watched { opacity: 0.55; }
+        .episode-card.watched .ep-num { opacity: 0.5; }
 
         /* Modal */
         .modal-overlay {
@@ -314,6 +320,7 @@ async function showEpisodes(seasonId) {
 
 function renderEpisodes(episodes) {
     const color = SERIES[currentSeriesKey].color;
+    const watched = getWatched();
     if (!episodes.length) {
         content.innerHTML = '<div class="error-msg">Niciun episod gasit.</div>';
         return;
@@ -322,14 +329,15 @@ function renderEpisodes(episodes) {
     episodes.forEach((ep, i) => {
         const dateStr = ep.date.toLocaleDateString('ro-RO', { day: 'numeric', month: 'short', year: 'numeric' });
         const sc = ep.sources.length;
+        const isWatched = watched.has(ep.id);
         html += `
-        <div class="episode-card" data-idx="${i}">
+        <div class="episode-card${isWatched?' watched':''}" data-idx="${i}">
             <div class="ep-num" style="background:${color}">${ep.num || i+1}</div>
             <div class="ep-info">
                 <div class="ep-title">${ep.title}</div>
                 <div class="ep-meta">${dateStr} &middot; <span class="badge-src">${sc} surs${sc>1?'e':'a'}</span></div>
             </div>
-            <div class="ep-play">▶</div>
+            ${isWatched ? '<span class="ep-watched">VAZUT</span>' : '<div class="ep-play">▶</div>'}
         </div>`;
     });
     content.innerHTML = html;
@@ -376,6 +384,9 @@ function openPlayer(episode) {
     loadSource(0);
     document.getElementById('modalOverlay').classList.add('active');
     document.body.style.overflow = 'hidden';
+    // Marcheaza ca vazut
+    markWatched(episode.id);
+    if (currentView === 'episodes') renderEpisodes(episodesCache[currentSeasonId]);
 }
 
 function renderServerButtons() {
@@ -415,6 +426,22 @@ document.getElementById('modalOverlay').addEventListener('click', e => {
     if (e.target === e.currentTarget) closePlayer();
 });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closePlayer(); });
+
+// ============================================================
+// VAZUT (localStorage)
+// ============================================================
+const WATCHED_KEY = 'seriale_watched';
+
+function getWatched() {
+    try { return new Set(JSON.parse(localStorage.getItem(WATCHED_KEY) || '[]')); }
+    catch { return new Set(); }
+}
+
+function markWatched(id) {
+    const w = getWatched();
+    w.add(id);
+    localStorage.setItem(WATCHED_KEY, JSON.stringify([...w]));
+}
 
 // Init
 showSeriesList();
