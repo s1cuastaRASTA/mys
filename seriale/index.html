@@ -298,7 +298,7 @@ async function showEpisodes(seasonId) {
     content.innerHTML = '<div class="loading-indicator"><div class="spinner"></div></div>';
 
     if (!episodesCache[seasonId]) {
-        const resp = await fetch(`${API}/posts?categories=${seasonId}&per_page=50&orderby=date&order=desc&_fields=id,title,content,date`);
+        const resp = await fetch(`${API}/posts?categories=${seasonId}&per_page=50&orderby=date&order=asc&_fields=id,title,content,date`);
         const posts = await resp.json();
         episodesCache[seasonId] = posts.map(p => ({
             id: p.id,
