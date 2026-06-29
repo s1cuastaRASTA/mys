@@ -257,7 +257,7 @@ async function showSeasons(seriesKey) {
         seasonsCache[seriesKey] = await resp.json();
     }
 
-    const seasons = seasonsCache[seriesKey];
+    const seasons = seasonsCache[seriesKey].filter(se => se.count > 0);
     if (!seasons.length) {
         content.innerHTML = '<div class="error-msg">Niciun sezon gasit.</div>';
         return;
