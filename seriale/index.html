@@ -327,14 +327,15 @@ function renderEpisodes(episodes) {
     }
     let html = '';
     episodes.forEach((ep, i) => {
-        const dateStr = ep.date.toLocaleDateString('ro-RO', { day: 'numeric', month: 'short', year: 'numeric' });
+        const dateStr = ep.date.toLocaleDateString('ro-RO', { day: 'numeric', month: 'long', year: 'numeric' });
         const sc = ep.sources.length;
         const isWatched = watched.has(ep.id);
+        const shortTitle = ep.num ? `Episodul ${ep.num}` : ep.title;
         html += `
         <div class="episode-card${isWatched?' watched':''}" data-idx="${i}">
             <div class="ep-num" style="background:${color}">${ep.num || i+1}</div>
             <div class="ep-info">
-                <div class="ep-title">${ep.title}</div>
+                <div class="ep-title">${shortTitle}</div>
                 <div class="ep-meta">${dateStr} &middot; <span class="badge-src">${sc} surs${sc>1?'e':'a'}</span></div>
             </div>
             ${isWatched ? '<span class="ep-watched">VAZUT</span>' : '<div class="ep-play">▶</div>'}
