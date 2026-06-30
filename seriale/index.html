@@ -9,6 +9,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#0b0b12">
     <link rel="manifest" href="seriale-manifest.json">
+    <link rel="apple-touch-icon" href="icon-192.png">
     <script>
       if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('sw.js');
@@ -171,6 +172,17 @@
             font-size: 0.68rem; border-top: 1px solid var(--border); margin-top: 16px;
         }
         .error-msg { text-align: center; padding: 30px 20px; color: var(--text-muted); }
+        .offline-note {
+            font-size: 0.72rem; color: #ffb74d; background: rgba(255,183,77,0.1);
+            border: 1px solid rgba(255,183,77,0.3); border-radius: 10px;
+            padding: 8px 12px; margin-bottom: 12px; text-align: center;
+        }
+        .connection-banner {
+            display: none; align-items: center; justify-content: center; gap: 8px;
+            background: #b71c1c; color: #fff; font-size: 0.78rem; font-weight: 700;
+            padding: 8px 12px; text-align: center; position: sticky; top: 0; z-index: 150;
+        }
+        .connection-banner.visible { display: flex; }
 
         /* Add episode form */
         .add-fab {
@@ -217,6 +229,7 @@
 <body>
 
 <div class="header"><h1>Seriale Online</h1></div>
+<div class="connection-banner" id="connBanner">📡 Fara semnal — se afiseaza datele salvate local</div>
 <div class="back-bar" id="backBar">
     <button class="back-btn" id="backBtn">← Inapoi</button>
     <span class="back-label" id="backLabel"></span>
@@ -260,6 +273,59 @@
 
 <script>
 const API = 'https://veziaici.net/wp-json/wp/v2';
+const FETCH_TIMEOUT_MS = 10000;
+const CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 ore
+
+function fetchWithTimeout(url, ms) {
+    const controller = new AbortController();
+    const t = setTimeout(() => controller.abort(), ms);
+    return fetch(url, { signal: controller.signal }).finally(() => clearTimeout(t));
+}
+
+// Fetch robust: incearca direct, apoi pe rand cateva proxy-uri CORS publice
+// (necesare pentru ca site-ul ruleaza pe alt domeniu decat veziaici.net si
+// WordPress nu trimite header-e CORS catre domenii straine by default).
+// Foarte util cu semnal slab: timeout scurt pe fiecare incercare, nu sta blocat.
+const CORS_PROXIES = [
+    url => url, // direct
+    url => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(url),
+    url => 'https://corsproxy.io/?url=' + encodeURIComponent(url),
+    url => 'https://thingproxy.freeboard.io/fetch/' + url
+];
+
+async function corsFetch(url) {
+    let lastErr;
+    for (const wrap of CORS_PROXIES) {
+        try {
+            const r = await fetchWithTimeout(wrap(url), FETCH_TIMEOUT_MS);
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return await r.json();
+        } catch (e) {
+            lastErr = e;
+        }
+    }
+    throw lastErr || new Error('Toate sursele au esuat');
+}
+
+// ============================================================
+// CACHE PERSISTENT (localStorage) - ca listele sa ramana
+// disponibile offline dupa prima incarcare (utile cu semnal slab/fara semnal)
+// ============================================================
+function lsCacheGet(key) {
+    try {
+        const raw = localStorage.getItem('seriale_cache_' + key);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (Date.now() - parsed.ts > CACHE_TTL_MS) return { stale: true, data: parsed.data };
+        return { stale: false, data: parsed.data };
+    } catch (e) { return null; }
+}
+
+function lsCacheSet(key, data) {
+    try {
+        localStorage.setItem('seriale_cache_' + key, JSON.stringify({ ts: Date.now(), data }));
+    } catch (e) { /* localStorage poate fi plin, ignoram */ }
+}
 
 // Configurare seriale + sezoane
 const SERIES = {
@@ -569,12 +635,25 @@ async function showSeasons(seriesKey) {
     backBar.classList.add('visible');
     content.innerHTML = '<div class="loading-indicator"><div class="spinner"></div></div>';
 
+    let usedStaleCache = false;
     if (!seasonsCache[seriesKey]) {
-        const resp = await fetch(`${API}/categories?parent=${s.catId}&per_page=50&orderby=id&order=desc`);
-        seasonsCache[seriesKey] = await resp.json();
+        const lsKey = 'seasons_' + seriesKey;
+        try {
+            seasonsCache[seriesKey] = await corsFetch(`${API}/categories?parent=${s.catId}&per_page=50&orderby=id&order=desc`);
+            lsCacheSet(lsKey, seasonsCache[seriesKey]);
+        } catch (e) {
+            console.error('Eroare la incarcarea sezoanelor:', e);
+            const cached = lsCacheGet(lsKey);
+            if (cached) {
+                seasonsCache[seriesKey] = cached.data;
+                usedStaleCache = true;
+            } else {
+                seasonsCache[seriesKey] = null;
+            }
+        }
     }
 
-    const apiSeasons = seasonsCache[seriesKey].filter(se => se.count > 0);
+    const apiSeasons = (seasonsCache[seriesKey] || []).filter(se => se.count > 0);
     // Prepend manual seasons + custom
     const manual = SERIES[seriesKey].manualSeasons || [];
     // Get custom seasons using index
@@ -602,11 +681,19 @@ async function showSeasons(seriesKey) {
         return nb - na;
     });
     if (!all.length) {
-        content.innerHTML = '<div class="error-msg">Niciun sezon gasit.</div>';
+        content.innerHTML = '<div class="error-msg">Nu am gasit sezoane (verifica semnalul). <br><br><button class="back-btn" id="retrySeasonsBtn">↻ Reincearca</button></div>';
+        document.getElementById('retrySeasonsBtn').addEventListener('click', () => {
+            delete seasonsCache[seriesKey];
+            showSeasons(seriesKey);
+        });
         return;
     }
 
-    let html = '<div class="season-grid">';
+    let html = '';
+    if (usedStaleCache) {
+        html += '<div class="offline-note">⚠ Nu am putut contacta serverul acum — afisez ultima lista salvata.</div>';
+    }
+    html += '<div class="season-grid">';
     const seen = new Set();
     all.forEach(se => {
         const epCount = se.count || '?';
@@ -666,15 +753,35 @@ async function showEpisodes(seasonId) {
     if (seasonId < 0) return; // unknown custom season
 
     if (!episodesCache[seasonId]) {
-        const resp = await fetch(`${API}/posts?categories=${seasonId}&per_page=50&orderby=date&order=asc&_fields=id,title,content,date`);
-        const posts = await resp.json();
-        episodesCache[seasonId] = posts.map(p => ({
-            id: p.id,
-            title: p.title.rendered,
-            date: new Date(p.date),
-            sources: extractIframes(p.content.rendered),
-            num: (p.title.rendered.match(/Episodul\s+(\d+)/i) || ['',''])[1]
-        })).filter(ep => ep.sources.length > 0);
+        const lsKey = 'episodes_' + currentSeriesKey + '_' + seasonId;
+        let usedStaleCache = false;
+        try {
+            const posts = await corsFetch(`${API}/posts?categories=${seasonId}&per_page=50&orderby=date&order=asc&_fields=id,title,content,date`);
+            episodesCache[seasonId] = posts.map(p => ({
+                id: p.id,
+                title: p.title.rendered,
+                date: new Date(p.date),
+                sources: extractIframes(p.content.rendered),
+                num: (p.title.rendered.match(/Episodul\s+(\d+)/i) || ['',''])[1]
+            })).filter(ep => ep.sources.length > 0);
+            lsCacheSet(lsKey, episodesCache[seasonId]);
+        } catch (e) {
+            console.error('Eroare la incarcarea episoadelor:', e);
+            const cached = lsCacheGet(lsKey);
+            if (cached) {
+                episodesCache[seasonId] = cached.data.map(ep => ({ ...ep, date: new Date(ep.date) }));
+                usedStaleCache = true;
+            } else {
+                content.innerHTML = '<div class="error-msg">Nu am putut incarca episoadele (verifica semnalul). <br><br><button class="back-btn" id="retryEpBtn">↻ Reincearca</button></div>';
+                document.getElementById('retryEpBtn').addEventListener('click', () => showEpisodes(seasonId));
+                return;
+            }
+        }
+        renderEpisodes(episodesCache[seasonId]);
+        if (usedStaleCache) {
+            content.insertAdjacentHTML('afterbegin', '<div class="offline-note">⚠ Nu am putut contacta serverul acum — afisez ultima lista salvata.</div>');
+        }
+        return;
     }
 
     renderEpisodes(episodesCache[seasonId]);
@@ -887,6 +994,17 @@ function markWatched(id) {
     w.add(id);
     localStorage.setItem(WATCHED_KEY, JSON.stringify([...w]));
 }
+
+// ============================================================
+// BANNER ONLINE/OFFLINE - util cu semnal slab/intermitent
+// ============================================================
+const connBanner = document.getElementById('connBanner');
+function updateConnBanner() {
+    connBanner.classList.toggle('visible', !navigator.onLine);
+}
+window.addEventListener('online', updateConnBanner);
+window.addEventListener('offline', updateConnBanner);
+updateConnBanner();
 
 // Init
 showSeriesList();
