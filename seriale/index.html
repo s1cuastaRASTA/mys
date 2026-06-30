@@ -415,15 +415,12 @@ async function showEpisodes(seasonId) {
     // Check manual seasons first
     var manual = SERIES[currentSeriesKey].manualSeasons || [];
     var manSeason = manual.find(ms => ms.id === seasonId);
-    if (seasonId === -99) {
-        const ck = 'seriale_custom_' + currentSeriesKey;
-        let custom = [];
-        try { custom = JSON.parse(localStorage.getItem(ck) || '[]'); } catch(e) {}
-        episodesCache[seasonId] = custom;
-        renderEpisodes(custom);
+    if (manSeason) {
+        episodesCache[seasonId] = manSeason.episodes;
+        renderEpisodes(manSeason.episodes);
         return;
     }
-    if (seasonId < 0 && seasonId !== -99) {
+    if (seasonId === -99 || seasonId < -100) {
         const sn = -(seasonId + 100);
         const ck = 'seriale_custom_' + currentSeriesKey + '_s' + sn;
         let custom = [];
