@@ -197,7 +197,21 @@ const SERIES = {
         bannerGrad: 'linear-gradient(135deg, #c62828, #e53935)',
         emoji: '\u{1F3D8}',
         desc: 'Serial de comedie romanesc. Toate sezoanele si episoadele complete.',
-        catId: 38  // parent category
+        catId: 38,  // parent category
+        manualSeasons: [
+            {
+                id: -1, name: 'Sezonul 1 (Odysee)', episodes: [
+                    { id: 'ody1', title: 'Las Fierbinti sezonul 1 episodul 1', date: new Date('2024-01-01'), num: '1',
+                        sources: ['https://odysee.com/$/embed/@Las-Fierbinti:9/Las-Fierbinti-sezonul-1-episodul-1:d2a4a89e'] },
+                    { id: 'ody2', title: 'Las Fierbinti sezonul 1 episodul 2', date: new Date('2024-01-02'), num: '2',
+                        sources: ['https://odysee.com/$/embed/@Las-Fierbinti:9/Las-Fierbinti-sezonul-1-episodul-2:c6e31ae9'] },
+                    { id: 'ody3', title: 'Las Fierbinti sezonul 1 episodul 3', date: new Date('2024-01-03'), num: '3',
+                        sources: ['https://odysee.com/$/embed/@Las-Fierbinti:9/Las_Fierbinti_sezonul_1_episodul_3_video:33752471'] },
+                    { id: 'ody4', title: 'Las Fierbinti sezonul 1 episodul 4', date: new Date('2024-01-04'), num: '4',
+                        sources: ['https://odysee.com/$/embed/@Las-Fierbinti:9/Las-Fierbinti-sezonul-1-episodul-4:37963237'] }
+                ]
+            }
+        ]
     },
     camatarii: {
         name: 'Camatarii',
@@ -264,14 +278,17 @@ async function showSeasons(seriesKey) {
     }
 
     const seasons = seasonsCache[seriesKey].filter(se => se.count > 0);
-    if (!seasons.length) {
+    // Prepend manual seasons
+    const manual = SERIES[seriesKey].manualSeasons || [];
+    const allSeasons = [...manual.map(ms => ({ id: ms.id, name: ms.name, count: ms.episodes.length, _manual: true })), ...seasons];
+    if (!allSeasons.length) {
         content.innerHTML = '<div class="error-msg">Niciun sezon gasit.</div>';
         return;
     }
 
     let html = '<div class="season-grid">';
     const seen = new Set();
-    seasons.forEach(se => {
+    allSeasons.forEach(se => {
         const epCount = se.count || '?';
         const m = se.name.match(/Sezonul\s+\d+/i);
         const shortName = m ? m[0] : se.name.replace(/^Las Fie[rl]binti\s+/i, '').replace(/^Camatarii\s+/i, '').replace(/\s+Online.*$/i, '').replace(/\s+[Ii]n\s+[Rr]eluare.*$/i, '').replace(/\s+(Complet|Integral|Episoade|Serial|Romanesc|Online|Compleet).*$/i, '').trim();
@@ -302,6 +319,15 @@ async function showEpisodes(seasonId) {
     backLabel.textContent = 'Episoade';
     backBar.classList.add('visible');
     content.innerHTML = '<div class="loading-indicator"><div class="spinner"></div></div>';
+
+    // Check manual seasons first
+    const manual = SERIES[currentSeriesKey].manualSeasons || [];
+    const manSeason = manual.find(ms => ms.id === seasonId);
+    if (manSeason) {
+        episodesCache[seasonId] = manSeason.episodes;
+        renderEpisodes(manSeason.episodes);
+        return;
+    }
 
     if (!episodesCache[seasonId]) {
         const resp = await fetch(`${API}/posts?categories=${seasonId}&per_page=50&orderby=date&order=asc&_fields=id,title,content,date`);
