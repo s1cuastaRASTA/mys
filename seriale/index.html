@@ -216,6 +216,8 @@
         <input type="text" id="addLink" placeholder="https://ok.ru/videoembed/...">
         <label>Titlu</label>
         <input type="text" id="addTitle" placeholder="ex: Episodul 5">
+        <label>Numar sezon</label>
+        <input type="text" id="addSeason" placeholder="ex: 16">
         <label>Numar episod</label>
         <input type="text" id="addNum" placeholder="ex: 5">
         <label>Data (optional)</label>
@@ -349,11 +351,31 @@ async function showSeasons(seriesKey) {
     const apiSeasons = seasonsCache[seriesKey].filter(se => se.count > 0);
     // Prepend manual seasons + custom
     const manual = SERIES[seriesKey].manualSeasons || [];
-    const customKey = 'seriale_custom_' + seriesKey;
-    let custom = [];
-    try { custom = JSON.parse(localStorage.getItem(customKey) || '[]'); } catch(e) {}
-    const allSeasons = [...manual.map(ms => ({ id: ms.id, name: ms.name, count: ms.episodes.length, _manual: true }))];
-    if (custom.length > 0) allSeasons.unshift({ id: -99, name: 'Episoadele tale', count: custom.length, _manual: true });
+    // Get custom seasons from localStorage
+    const customSeasons = [];
+    for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        const prefix = 'seriale_custom_' + seriesKey + '_s';
+        if (key && key.startsWith(prefix)) {
+            const sn = key.replace(prefix, '');
+            try {
+                const eps = JSON.parse(localStorage.getItem(key) || '[]');
+                if (eps.length > 0) customSeasons.push({ id: -(100 + parseInt(sn) || 0), name: 'Sezonul ' + sn + ' (custom)', count: eps.length, _manual: true, _custom: sn });
+            } catch(e) {}
+        }
+    }
+    // Sort custom seasons by number descending
+    customSeasons.sort((a,b) => parseInt(b._custom) - parseInt(a._custom));
+
+    const allSeasons = [...customSeasons, ...manual.map(ms => ({ id: ms.id, name: ms.name, count: ms.episodes.length, _manual: true }))];
+    if (customSeasons.length === 0) {
+        // Keep old flat storage for backward compat
+        const oldKey = 'seriale_custom_' + seriesKey;
+        try {
+            const old = JSON.parse(localStorage.getItem(oldKey) || '[]');
+            if (old.length > 0) allSeasons.unshift({ id: -99, name: 'Episoadele tale', count: old.length, _manual: true });
+        } catch(e) {}
+    }
     const all = [...allSeasons, ...apiSeasons];
     if (!all.length) {
         content.innerHTML = '<div class="error-msg">Niciun sezon gasit.</div>';
@@ -400,6 +422,16 @@ async function showEpisodes(seasonId) {
     var manSeason = manual.find(ms => ms.id === seasonId);
     if (seasonId === -99) {
         const ck = 'seriale_custom_' + currentSeriesKey;
+        let custom = [];
+        try { custom = JSON.parse(localStorage.getItem(ck) || '[]'); } catch(e) {}
+        episodesCache[seasonId] = custom;
+        renderEpisodes(custom);
+        return;
+    }
+    if (seasonId < 0 && seasonId !== -99) {
+        // Custom season
+        const sn = -(seasonId + 100);
+        const ck = 'seriale_custom_' + currentSeriesKey + '_s' + sn;
         let custom = [];
         try { custom = JSON.parse(localStorage.getItem(ck) || '[]'); } catch(e) {}
         episodesCache[seasonId] = custom;
@@ -553,6 +585,7 @@ function clearAddForm() {
     document.getElementById('addLink').value = '';
     document.getElementById('addTitle').value = '';
     document.getElementById('addNum').value = '';
+    document.getElementById('addSeason').value = '';
     document.getElementById('addDate').value = '';
 }
 
@@ -560,6 +593,7 @@ addSave.addEventListener('click', () => {
     let link = document.getElementById('addLink').value.trim();
     const title = document.getElementById('addTitle').value.trim() || 'Episod';
     const num = document.getElementById('addNum').value.trim() || '';
+    const seasonNum = document.getElementById('addSeason').value.trim() || '?';
     const dateVal = document.getElementById('addDate').value;
     if (!link) return alert('Introdu link-ul video!');
     const m = link.match(/ok\.ru\/video\/(\d+)/);
@@ -567,9 +601,10 @@ addSave.addEventListener('click', () => {
     if (link.includes('odysee.com') && !link.includes('/$/embed/')) link = link.replace('/@', '/$/embed/@');
     const episode = {
         id: 'c' + Date.now(), title: title, num: num,
+        season: seasonNum,
         date: dateVal ? new Date(dateVal) : new Date(), sources: [link]
     };
-    const ck = 'seriale_custom_' + currentSeriesKey;
+    const ck = 'seriale_custom_' + currentSeriesKey + '_s' + seasonNum;
     let custom = [];
     try { custom = JSON.parse(localStorage.getItem(ck) || '[]'); } catch(e) {}
     custom.unshift(episode);
