@@ -154,6 +154,41 @@
         }
         .error-msg { text-align: center; padding: 30px 20px; color: var(--text-muted); }
 
+        /* Add episode form */
+        .add-fab {
+            position: fixed; bottom: 24px; right: 20px; width: 52px; height: 52px;
+            border-radius: 50%; background: var(--accent); color: #fff; font-size: 1.6rem;
+            border: none; cursor: pointer; z-index: 200; display: none; align-items: center;
+            justify-content: center; box-shadow: 0 4px 16px rgba(230,57,70,0.5);
+            transition: transform 0.2s;
+        }
+        .add-fab.visible { display: flex; }
+        .add-fab:active { transform: scale(0.9); }
+
+        .add-form-overlay {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 1100;
+            display: none; align-items: center; justify-content: center;
+        }
+        .add-form-overlay.active { display: flex; }
+        .add-form {
+            background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius);
+            padding: 20px; width: 90%; max-width: 400px;
+        }
+        .add-form h3 { font-size: 0.95rem; margin-bottom: 14px; }
+        .add-form label { display: block; font-size: 0.72rem; color: var(--text-muted); margin-bottom: 4px; }
+        .add-form input {
+            width: 100%; padding: 10px; border-radius: 10px; border: 1px solid var(--border);
+            background: var(--bg); color: var(--text); font-size: 0.85rem; margin-bottom: 12px; outline: none;
+        }
+        .add-form input:focus { border-color: var(--accent); }
+        .add-form .btn-row { display: flex; gap: 8px; }
+        .add-form .btn {
+            flex: 1; padding: 10px; border-radius: 10px; border: none; font-weight: 700;
+            font-size: 0.82rem; cursor: pointer;
+        }
+        .btn-save { background: var(--accent); color: #fff; }
+        .btn-cancel { background: var(--border); color: var(--text); }
+
         @media (max-width: 400px) {
             .series-banner { height: 100px; }
             .series-banner h2 { font-size: 1.3rem; }
@@ -171,6 +206,25 @@
 <div class="container" id="content"></div>
 <div class="footer">
     <p>Episoadele sunt gazduite pe platforme video publice (VK, Vidmoly, Rumble). Acest site nu gazduieste niciun fisier.</p>
+</div>
+
+<button class="add-fab" id="addFab" title="Adauga episod">+</button>
+<div class="add-form-overlay" id="addFormOverlay">
+    <div class="add-form">
+        <h3>Adauga episod</h3>
+        <label>Link video (ok.ru/videoembed/...)</label>
+        <input type="text" id="addLink" placeholder="https://ok.ru/videoembed/...">
+        <label>Titlu</label>
+        <input type="text" id="addTitle" placeholder="ex: Episodul 5">
+        <label>Numar episod</label>
+        <input type="text" id="addNum" placeholder="ex: 5">
+        <label>Data (optional)</label>
+        <input type="date" id="addDate">
+        <div class="btn-row">
+            <button class="btn btn-cancel" id="addCancel">Anuleaza</button>
+            <button class="btn btn-save" id="addSave">Salveaza</button>
+        </div>
+    </div>
 </div>
 
 <div class="modal-overlay" id="modalOverlay">
@@ -257,6 +311,7 @@ const backLabel = document.getElementById('backLabel');
 function showSeriesList() {
     currentView = 'series';
     backBar.classList.remove('visible');
+    document.getElementById('addFab').classList.remove('visible');
     let html = '<div class="series-grid">';
     for (const [key, s] of Object.entries(SERIES)) {
         html += `
@@ -291,18 +346,23 @@ async function showSeasons(seriesKey) {
         seasonsCache[seriesKey] = await resp.json();
     }
 
-    const seasons = seasonsCache[seriesKey].filter(se => se.count > 0);
-    // Prepend manual seasons
+    const apiSeasons = seasonsCache[seriesKey].filter(se => se.count > 0);
+    // Prepend manual seasons + custom
     const manual = SERIES[seriesKey].manualSeasons || [];
-    const allSeasons = [...manual.map(ms => ({ id: ms.id, name: ms.name, count: ms.episodes.length, _manual: true })), ...seasons];
-    if (!allSeasons.length) {
+    const customKey = 'seriale_custom_' + seriesKey;
+    let custom = [];
+    try { custom = JSON.parse(localStorage.getItem(customKey) || '[]'); } catch(e) {}
+    const allSeasons = [...manual.map(ms => ({ id: ms.id, name: ms.name, count: ms.episodes.length, _manual: true }))];
+    if (custom.length > 0) allSeasons.unshift({ id: -99, name: 'Episoadele tale', count: custom.length, _manual: true });
+    const all = [...allSeasons, ...apiSeasons];
+    if (!all.length) {
         content.innerHTML = '<div class="error-msg">Niciun sezon gasit.</div>';
         return;
     }
 
     let html = '<div class="season-grid">';
     const seen = new Set();
-    allSeasons.forEach(se => {
+    all.forEach(se => {
         const epCount = se.count || '?';
         const m = se.name.match(/Sezonul\s+\d+/i);
         const shortName = m ? m[0] : se.name.replace(/^Las Fie[rl]binti\s+/i, '').replace(/^Camatarii\s+/i, '').replace(/\s+Online.*$/i, '').replace(/\s+[Ii]n\s+[Rr]eluare.*$/i, '').replace(/\s+(Complet|Integral|Episoade|Serial|Romanesc|Online|Compleet).*$/i, '').trim();
@@ -325,6 +385,7 @@ async function showSeasons(seriesKey) {
     document.querySelectorAll('.season-card').forEach(card => {
         card.addEventListener('click', () => showEpisodes(parseInt(card.dataset.seasonId)));
     });
+    document.getElementById('addFab').classList.add('visible');
 }
 
 async function showEpisodes(seasonId) {
@@ -335,8 +396,16 @@ async function showEpisodes(seasonId) {
     content.innerHTML = '<div class="loading-indicator"><div class="spinner"></div></div>';
 
     // Check manual seasons first
-    const manual = SERIES[currentSeriesKey].manualSeasons || [];
-    const manSeason = manual.find(ms => ms.id === seasonId);
+    var manual = SERIES[currentSeriesKey].manualSeasons || [];
+    var manSeason = manual.find(ms => ms.id === seasonId);
+    if (seasonId === -99) {
+        const ck = 'seriale_custom_' + currentSeriesKey;
+        let custom = [];
+        try { custom = JSON.parse(localStorage.getItem(ck) || '[]'); } catch(e) {}
+        episodesCache[seasonId] = custom;
+        renderEpisodes(custom);
+        return;
+    }
     if (manSeason) {
         episodesCache[seasonId] = manSeason.episodes;
         renderEpisodes(manSeason.episodes);
@@ -467,6 +536,53 @@ document.getElementById('modalOverlay').addEventListener('click', e => {
     if (e.target === e.currentTarget) closePlayer();
 });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closePlayer(); });
+
+// ============================================================
+// ADAUGA EPISOD (FAB + Form)
+// ============================================================
+const addFab = document.getElementById('addFab');
+const addFormOverlay = document.getElementById('addFormOverlay');
+const addCancel = document.getElementById('addCancel');
+const addSave = document.getElementById('addSave');
+
+addFab.addEventListener('click', () => addFormOverlay.classList.add('active'));
+addCancel.addEventListener('click', () => { addFormOverlay.classList.remove('active'); clearAddForm(); });
+addFormOverlay.addEventListener('click', e => { if (e.target === addFormOverlay) { addFormOverlay.classList.remove('active'); clearAddForm(); } });
+
+function clearAddForm() {
+    document.getElementById('addLink').value = '';
+    document.getElementById('addTitle').value = '';
+    document.getElementById('addNum').value = '';
+    document.getElementById('addDate').value = '';
+}
+
+addSave.addEventListener('click', () => {
+    let link = document.getElementById('addLink').value.trim();
+    const title = document.getElementById('addTitle').value.trim() || 'Episod';
+    const num = document.getElementById('addNum').value.trim() || '';
+    const dateVal = document.getElementById('addDate').value;
+    if (!link) return alert('Introdu link-ul video!');
+    const m = link.match(/ok\.ru\/video\/(\d+)/);
+    if (m) link = 'https://ok.ru/videoembed/' + m[1];
+    if (link.includes('odysee.com') && !link.includes('/$/embed/')) link = link.replace('/@', '/$/embed/@');
+    const episode = {
+        id: 'c' + Date.now(), title: title, num: num,
+        date: dateVal ? new Date(dateVal) : new Date(), sources: [link]
+    };
+    const ck = 'seriale_custom_' + currentSeriesKey;
+    let custom = [];
+    try { custom = JSON.parse(localStorage.getItem(ck) || '[]'); } catch(e) {}
+    custom.unshift(episode);
+    localStorage.setItem(ck, JSON.stringify(custom));
+    addFormOverlay.classList.remove('active');
+    clearAddForm();
+    if (currentView === 'seasons') showSeasons(currentSeriesKey);
+    else if (currentView === 'episodes' && currentSeasonId === -99) showEpisodes(-99);
+});
+
+// Override showEpisodes to hide FAB
+const origShowEp = showEpisodes;
+showEpisodes = function(sid) { addFab.classList.remove('visible'); return origShowEp(sid); };
 
 // ============================================================
 // VAZUT (localStorage)
