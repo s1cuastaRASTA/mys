@@ -236,7 +236,7 @@
             <button class="modal-close" id="modalClose">&times;</button>
         </div>
         <div class="player-wrap">
-            <iframe id="playerFrame" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen sandbox="allow-scripts allow-same-origin allow-presentation allow-popups"></iframe>
+            <iframe id="playerFrame" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>
         </div>
         <div class="server-btns" id="serverBtns"></div>
     </div>
@@ -549,13 +549,39 @@ function renderServerButtons() {
 
 function loadSource(index) {
     const frame = document.getElementById('playerFrame');
-    if (currentEpisode.sources[index]) frame.src = currentEpisode.sources[index];
+    const playerWrap = frame.parentElement;
+    if (!currentEpisode.sources[index]) return;
+    const url = currentEpisode.sources[index];
+    
+    if (url.includes('ok.ru')) {
+        // ok.ru blocheaza iframe, extragem URL-ul direct al video-ului
+        playerWrap.innerHTML = '<div class="loading-indicator" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;"><div class="spinner"></div><span>Se incarca de pe ok.ru...</span></div>';
+        const cors = 'https://api.allorigins.win/raw?url=';
+        fetch(cors + encodeURIComponent(url))
+            .then(r => r.text())
+            .then(html => {
+                const m = html.match(/"hlsManifestUrl":"([^"]+)"/);
+                if (m) {
+                    const hlsUrl = m[1].replace(/\\u0026/g, '&');
+                    playerWrap.innerHTML = '<video id="okVideo" controls autoplay playsinline style="position:absolute;inset:0;width:100%;height:100%;background:#000;" src="' + hlsUrl + '"></video>';
+                } else {
+                    playerWrap.innerHTML = '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--text-muted);">Nu s-a putut incarca</div>';
+                }
+            })
+            .catch(() => {
+                playerWrap.innerHTML = '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--text-muted);">Eroare la incarcare</div>';
+            });
+    } else {
+        playerWrap.innerHTML = '<iframe id="playerFrame" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen style="position:absolute;inset:0;width:100%;height:100%;border:none;"></iframe>';
+        document.getElementById('playerFrame').src = url;
+    }
 }
 
 function closePlayer() {
     document.getElementById('modalOverlay').classList.remove('active');
     document.body.style.overflow = '';
-    setTimeout(() => { document.getElementById('playerFrame').src = ''; }, 300);
+    const pw = document.querySelector('.player-wrap');
+    pw.innerHTML = '<iframe id="playerFrame" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>';
     document.getElementById('serverBtns').innerHTML = '';
 }
 
