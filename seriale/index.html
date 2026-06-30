@@ -592,6 +592,9 @@ function renderServerButtons() {
         if (s.includes('vkvideo')) label = 'VK';
         else if (s.includes('vidmoly')) label = 'Vidmoly';
         else if (s.includes('rumble')) label = 'Rumble';
+        else if (s.includes('dailymotion')) label = 'Dailymotion';
+        else if (s.includes('ok.ru')) label = 'OK.ru';
+        else if (s.includes('odysee')) label = 'Odysee';
         return `<button class="server-btn${i===activeSource?' active':''}" data-idx="${i}">${label}</button>`;
     }).join('') + '<button class="refresh-btn" id="refreshBtn">↻</button>';
     container.querySelectorAll('.server-btn').forEach(btn => {
