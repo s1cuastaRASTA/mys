@@ -549,12 +549,11 @@ function renderServerButtons() {
 
 function loadSource(index) {
     const frame = document.getElementById('playerFrame');
-    const playerWrap = frame.parentElement;
-    if (!currentEpisode.sources[index]) return;
+    if (!frame || !currentEpisode.sources[index]) return;
     const url = currentEpisode.sources[index];
     
     if (url.includes('ok.ru')) {
-        // ok.ru blocheaza iframe, extragem URL-ul direct al video-ului
+        const playerWrap = frame.parentElement;
         playerWrap.innerHTML = '<div class="loading-indicator" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;"><div class="spinner"></div><span>Se incarca de pe ok.ru...</span></div>';
         const cors = 'https://api.allorigins.win/raw?url=';
         fetch(cors + encodeURIComponent(url))
@@ -565,24 +564,27 @@ function loadSource(index) {
                     const hlsUrl = m[1].replace(/\\u0026/g, '&');
                     playerWrap.innerHTML = '<video id="okVideo" controls autoplay playsinline style="position:absolute;inset:0;width:100%;height:100%;background:#000;" src="' + hlsUrl + '"></video>';
                 } else {
-                    playerWrap.innerHTML = '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--text-muted);">Nu s-a putut incarca</div>';
+                    playerWrap.innerHTML = '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--text-muted);">Nu s-a putut incarca video-ul</div>';
                 }
             })
             .catch(() => {
-                playerWrap.innerHTML = '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--text-muted);">Eroare la incarcare</div>';
+                playerWrap.innerHTML = '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--text-muted);">Eroare la incarcare. Incearca alt server.</div>';
             });
     } else {
-        playerWrap.innerHTML = '<iframe id="playerFrame" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen style="position:absolute;inset:0;width:100%;height:100%;border:none;"></iframe>';
-        document.getElementById('playerFrame').src = url;
+        frame.style.display = '';
+        frame.src = url;
     }
 }
 
 function closePlayer() {
     document.getElementById('modalOverlay').classList.remove('active');
     document.body.style.overflow = '';
-    const pw = document.querySelector('.player-wrap');
-    pw.innerHTML = '<iframe id="playerFrame" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>';
+    setTimeout(() => {
+        const pw = document.querySelector('.player-wrap');
+        pw.innerHTML = '<iframe id="playerFrame" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen style="position:absolute;inset:0;width:100%;height:100%;border:none;"></iframe>';
+    }, 300);
     document.getElementById('serverBtns').innerHTML = '';
+    currentEpisode = null;
 }
 
 document.getElementById('modalClose').addEventListener('click', closePlayer);
