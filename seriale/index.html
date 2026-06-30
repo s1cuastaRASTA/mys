@@ -9,6 +9,11 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#0b0b12">
     <link rel="manifest" href="seriale-manifest.json">
+    <script>
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('sw.js');
+      }
+    </script>
     <style>
         :root {
             --bg: #0b0b12; --card-bg: #151522; --card-hover: #1e1e32;
