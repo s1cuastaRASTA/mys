@@ -142,6 +142,12 @@
             font-size: 0.72rem; font-weight: 600; transition: all 0.2s;
         }
         .server-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+        .refresh-btn {
+            padding: 5px 10px; border-radius: 16px; border: 1px solid var(--border);
+            background: var(--bg); color: var(--text-muted); cursor: pointer;
+            font-size: 0.72rem; font-weight: 600; transition: all 0.2s; margin-left: auto;
+        }
+        .refresh-btn:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
         .player-wrap {
             position: relative; width: 100%; aspect-ratio: 16/9;
             background: #000; min-height: 250px;
@@ -537,7 +543,7 @@ function renderServerButtons() {
         else if (s.includes('vidmoly')) label = 'Vidmoly';
         else if (s.includes('rumble')) label = 'Rumble';
         return `<button class="server-btn${i===activeSource?' active':''}" data-idx="${i}">${label}</button>`;
-    }).join('');
+    }).join('') + '<button class="refresh-btn" id="refreshBtn">↻</button>';
     container.querySelectorAll('.server-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             activeSource = parseInt(btn.dataset.idx);
@@ -545,6 +551,8 @@ function renderServerButtons() {
             loadSource(activeSource);
         });
     });
+    const refreshBtn = document.getElementById('refreshBtn');
+    if (refreshBtn) refreshBtn.addEventListener('click', () => loadSource(activeSource));
 }
 
 function loadSource(index) {
