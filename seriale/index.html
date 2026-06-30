@@ -147,6 +147,8 @@
             background: #000; min-height: 250px;
         }
         .player-wrap iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: none; }
+        /* Needed for ok.ru embeds to stay in iframe */
+        .player-wrap iframe[sandbox] { }
 
         .footer {
             text-align: center; padding: 20px; color: var(--text-muted);
@@ -236,7 +238,7 @@
             <button class="modal-close" id="modalClose">&times;</button>
         </div>
         <div class="player-wrap">
-            <iframe id="playerFrame" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>
+            <iframe id="playerFrame" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen sandbox="allow-scripts allow-same-origin allow-presentation allow-popups"></iframe>
         </div>
         <div class="server-btns" id="serverBtns"></div>
     </div>
@@ -289,7 +291,8 @@ const SERIES = {
         bannerGrad: 'linear-gradient(135deg, #0d47a1, #1565c0)',
         emoji: '\u{1F3AC}',
         desc: 'Documentar romanesc. Episoade integrale in reluare din 2026.',
-        catId: 229
+        catId: 229,
+        manualSeasons: []
     }
 };
 
@@ -351,31 +354,23 @@ async function showSeasons(seriesKey) {
     const apiSeasons = seasonsCache[seriesKey].filter(se => se.count > 0);
     // Prepend manual seasons + custom
     const manual = SERIES[seriesKey].manualSeasons || [];
-    // Get custom seasons from localStorage
+    // Get custom seasons using index
     const customSeasons = [];
-    for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        const prefix = 'seriale_custom_' + seriesKey + '_s';
-        if (key && key.startsWith(prefix)) {
-            const sn = key.replace(prefix, '');
-            try {
-                const eps = JSON.parse(localStorage.getItem(key) || '[]');
-                if (eps.length > 0) customSeasons.push({ id: -(100 + parseInt(sn) || 0), name: 'Sezonul ' + sn + ' (custom)', count: eps.length, _manual: true, _custom: sn });
-            } catch(e) {}
-        }
-    }
-    // Sort custom seasons by number descending
-    customSeasons.sort((a,b) => parseInt(b._custom) - parseInt(a._custom));
+    const idxKey = 'seriale_custom_idx_' + seriesKey;
+    let idx = [];
+    try { idx = JSON.parse(localStorage.getItem(idxKey) || '[]'); } catch(e) {}
+    idx.forEach(sn => {
+        const ck = 'seriale_custom_' + seriesKey + '_' + sn;
+        try {
+            const eps = JSON.parse(localStorage.getItem(ck) || '[]');
+            if (eps.length > 0) {
+                const n = sn.replace('s','');
+                customSeasons.push({ id: -(100 + parseInt(n)), name: 'Sezonul ' + n + ' (custom)', count: eps.length, _manual: true, _custom: n });
+            }
+        } catch(e) {}
+    });
 
     const allSeasons = [...customSeasons, ...manual.map(ms => ({ id: ms.id, name: ms.name, count: ms.episodes.length, _manual: true }))];
-    if (customSeasons.length === 0) {
-        // Keep old flat storage for backward compat
-        const oldKey = 'seriale_custom_' + seriesKey;
-        try {
-            const old = JSON.parse(localStorage.getItem(oldKey) || '[]');
-            if (old.length > 0) allSeasons.unshift({ id: -99, name: 'Episoadele tale', count: old.length, _manual: true });
-        } catch(e) {}
-    }
     const all = [...allSeasons, ...apiSeasons];
     if (!all.length) {
         content.innerHTML = '<div class="error-msg">Niciun sezon gasit.</div>';
@@ -429,7 +424,6 @@ async function showEpisodes(seasonId) {
         return;
     }
     if (seasonId < 0 && seasonId !== -99) {
-        // Custom season
         const sn = -(seasonId + 100);
         const ck = 'seriale_custom_' + currentSeriesKey + '_s' + sn;
         let custom = [];
@@ -609,6 +603,12 @@ addSave.addEventListener('click', () => {
     try { custom = JSON.parse(localStorage.getItem(ck) || '[]'); } catch(e) {}
     custom.unshift(episode);
     localStorage.setItem(ck, JSON.stringify(custom));
+    // Track which seasons have custom episodes
+    const idxKey = 'seriale_custom_idx_' + currentSeriesKey;
+    let idx = [];
+    try { idx = JSON.parse(localStorage.getItem(idxKey) || '[]'); } catch(e) {}
+    if (!idx.includes('s' + seasonNum)) { idx.push('s' + seasonNum); idx.sort((a,b) => parseInt(b.slice(1)) - parseInt(a.slice(1))); }
+    localStorage.setItem(idxKey, JSON.stringify(idx));
     addFormOverlay.classList.remove('active');
     clearAddForm();
     if (currentView === 'seasons') showSeasons(currentSeriesKey);
