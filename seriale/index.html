@@ -536,7 +536,11 @@ function openPlayer(episode) {
 function renderServerButtons() {
     const container = document.getElementById('serverBtns');
     const sources = currentEpisode.sources;
-    if (sources.length <= 1) { container.innerHTML = ''; return; }
+    if (sources.length <= 1) {
+        container.innerHTML = '<button class="refresh-btn" id="refreshBtn" style="margin-left:auto;">↻ Reincarca</button>';
+        document.getElementById('refreshBtn').addEventListener('click', () => loadSource(0));
+        return;
+    }
     container.innerHTML = sources.map((s, i) => {
         let label = 'Server ' + (i+1);
         if (s.includes('vkvideo')) label = 'VK';
