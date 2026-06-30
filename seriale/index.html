@@ -421,19 +421,20 @@ async function showEpisodes(seasonId) {
         return;
     }
     if (seasonId === -99 || seasonId < -100) {
-        const sn = -(seasonId + 100);
-        const ck = 'seriale_custom_' + currentSeriesKey + '_s' + sn;
+        let ck;
+        if (seasonId === -99) {
+            ck = 'seriale_custom_' + currentSeriesKey;
+        } else {
+            const sn = -(seasonId + 100);
+            ck = 'seriale_custom_' + currentSeriesKey + '_s' + sn;
+        }
         let custom = [];
         try { custom = JSON.parse(localStorage.getItem(ck) || '[]'); } catch(e) {}
         episodesCache[seasonId] = custom;
         renderEpisodes(custom);
         return;
     }
-    if (manSeason) {
-        episodesCache[seasonId] = manSeason.episodes;
-        renderEpisodes(manSeason.episodes);
-        return;
-    }
+    if (seasonId < 0) return; // unknown custom season
 
     if (!episodesCache[seasonId]) {
         const resp = await fetch(`${API}/posts?categories=${seasonId}&per_page=50&orderby=date&order=asc&_fields=id,title,content,date`);
