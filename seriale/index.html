@@ -372,6 +372,12 @@ async function showSeasons(seriesKey) {
 
     const allSeasons = [...customSeasons, ...manual.map(ms => ({ id: ms.id, name: ms.name, count: ms.episodes.length, _manual: true }))];
     const all = [...allSeasons, ...apiSeasons];
+    // Sort by season number descending
+    all.sort((a, b) => {
+        const na = parseInt((a.name.match(/(\d+)/) || [0])[1]) || 0;
+        const nb = parseInt((b.name.match(/(\d+)/) || [0])[1]) || 0;
+        return nb - na;
+    });
     if (!all.length) {
         content.innerHTML = '<div class="error-msg">Niciun sezon gasit.</div>';
         return;
