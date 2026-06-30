@@ -1,0 +1,874 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TV Online Gratis - Canale TV Live Romania & International</title>
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#0b0b12">
+    <link rel="manifest" href="tv-manifest.json">
+    <link rel="apple-touch-icon" href="tv-icon-192.png">
+    <script>
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('sw.js');
+      }
+    </script>
+    <style>
+        :root {
+            --bg: #0b0b12;
+            --card-bg: #151522;
+            --card-hover: #1e1e32;
+            --accent: #e63946;
+            --accent2: #f72585;
+            --text: #e0e0e0;
+            --text-muted: #7777a0;
+            --border: #252540;
+            --tab-bg: #11111f;
+            --tab-active: #e63946;
+            --badge-hd: #4cc9f0;
+            --badge-fhd: #f72585;
+            --badge-sd: #ffd166;
+            --radius: 12px;
+            --shadow: 0 4px 24px rgba(0,0,0,0.5);
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            line-height: 1.5;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #151528 0%, #0b0b1a 100%);
+            border-bottom: 1px solid var(--border);
+            padding: 14px 20px;
+            text-align: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            backdrop-filter: blur(12px);
+        }
+        .header h1 {
+            font-size: 1.5rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--accent), #f72585);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .header .subtitle {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
+
+        .tabs-wrapper {
+            position: sticky;
+            top: 64px;
+            z-index: 99;
+            background: var(--bg);
+            border-bottom: 1px solid var(--border);
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none;
+        }
+        .tabs-wrapper::-webkit-scrollbar { display: none; }
+        .tabs {
+            display: flex;
+            gap: 4px;
+            padding: 8px 14px;
+            min-width: max-content;
+        }
+        .tab {
+            padding: 6px 16px;
+            border-radius: 20px;
+            border: 1px solid var(--border);
+            background: var(--tab-bg);
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 0.8rem;
+            font-weight: 600;
+            white-space: nowrap;
+            transition: all 0.2s;
+            user-select: none;
+        }
+        .tab:hover { background: var(--card-hover); color: var(--text); }
+        .tab.active { background: var(--tab-active); color: #fff; border-color: var(--tab-active); }
+        .tab .count { font-size: 0.65rem; opacity: 0.7; margin-left: 3px; }
+
+        .search-bar {
+            padding: 10px 20px;
+            max-width: 600px;
+            margin: 0 auto;
+            width: 100%;
+            position: relative;
+        }
+        .search-bar input {
+            width: 100%;
+            padding: 9px 16px 9px 38px;
+            border-radius: 24px;
+            border: 1px solid var(--border);
+            background: var(--card-bg);
+            color: var(--text);
+            font-size: 0.85rem;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .search-bar input:focus { border-color: var(--accent); }
+        .search-bar::before {
+            content: '\1F50D';
+            position: absolute;
+            left: 34px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 0.8rem;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 12px 16px;
+        }
+        .category-title {
+            font-size: 1rem;
+            font-weight: 700;
+            color: var(--text);
+            margin: 18px 0 10px;
+            padding-left: 4px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .category-title::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: var(--border);
+        }
+
+        .channels-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(145px, 1fr));
+            gap: 10px;
+        }
+
+        .channel-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 14px 10px 12px;
+            cursor: pointer;
+            transition: all 0.25s;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+            min-height: 135px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        .channel-card:hover {
+            background: var(--card-hover);
+            transform: translateY(-3px);
+            box-shadow: var(--shadow);
+            border-color: var(--accent);
+        }
+        .channel-card:active { transform: scale(0.96); }
+
+        .channel-logo {
+            width: 58px;
+            height: 58px;
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 800;
+            font-size: 1.5rem;
+            color: #fff;
+            position: relative;
+            flex-shrink: 0;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.3);
+        }
+        .channel-name {
+            font-size: 0.78rem;
+            font-weight: 600;
+            color: var(--text);
+            line-height: 1.2;
+            word-break: break-word;
+        }
+        .channel-program {
+            font-size: 0.63rem;
+            color: var(--text-muted);
+            line-height: 1.2;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        .quality-badge {
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            font-size: 0.55rem;
+            font-weight: 700;
+            padding: 1px 5px;
+            border-radius: 3px;
+            color: #fff;
+        }
+        .quality-HD { background: var(--badge-hd); }
+        .quality-FHD { background: var(--badge-fhd); }
+        .quality-SD { background: var(--badge-sd); color: #1a1a1a; }
+        .live-dot {
+            position: absolute;
+            top: 5px;
+            left: 5px;
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: #00e676;
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+        .server-count {
+            position: absolute;
+            bottom: 4px;
+            right: 6px;
+            font-size: 0.55rem;
+            color: var(--text-muted);
+            opacity: 0.8;
+        }
+
+        /* Modal */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.9);
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.25s;
+        }
+        .modal-overlay.active { opacity: 1; pointer-events: all; }
+        .modal {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            width: 95%;
+            max-width: 1000px;
+            overflow: hidden;
+            box-shadow: 0 8px 40px rgba(0,0,0,0.7);
+            transform: scale(0.95);
+            transition: transform 0.25s;
+            display: flex;
+            flex-direction: column;
+        }
+        .modal-overlay.active .modal { transform: scale(1); }
+        .modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 14px;
+            border-bottom: 1px solid var(--border);
+            flex-shrink: 0;
+        }
+        .modal-header .ch-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .modal-header .mini-logo {
+            width: 34px;
+            height: 34px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 800;
+            color: #fff;
+            font-size: 0.85rem;
+        }
+        .modal-header h3 { font-size: 0.9rem; font-weight: 700; }
+        .modal-close {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            border: 1px solid var(--border);
+            background: transparent;
+            color: var(--text);
+            cursor: pointer;
+            font-size: 1.1rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            line-height: 1;
+        }
+        .modal-close:hover { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+        .server-buttons {
+            display: flex;
+            gap: 6px;
+            padding: 8px 14px;
+            flex-wrap: wrap;
+            border-bottom: 1px solid var(--border);
+            flex-shrink: 0;
+        }
+        .server-btn {
+            padding: 5px 14px;
+            border-radius: 16px;
+            border: 1px solid var(--border);
+            background: var(--tab-bg);
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 0.72rem;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+        .server-btn:hover { background: var(--card-hover); color: var(--text); }
+        .server-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+        .player-wrapper {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 16 / 9;
+            background: #000;
+            min-height: 300px;
+        }
+        .player-wrapper iframe {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+        .player-placeholder {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-muted);
+            gap: 8px;
+            font-size: 0.85rem;
+        }
+        .player-placeholder .icon { font-size: 3rem; }
+
+        .footer {
+            text-align: center;
+            padding: 24px 20px;
+            color: var(--text-muted);
+            font-size: 0.7rem;
+            border-top: 1px solid var(--border);
+            margin-top: 20px;
+        }
+        .footer a { color: var(--accent); text-decoration: none; }
+
+        .connection-banner {
+            display: none; align-items: center; justify-content: center; gap: 8px;
+            background: #b71c1c; color: #fff; font-size: 0.78rem; font-weight: 700;
+            padding: 8px 12px; text-align: center; position: sticky; top: 0; z-index: 150;
+        }
+        .connection-banner.visible { display: flex; }
+        .player-placeholder.error { color: #ff8a80; }
+        .player-placeholder .retry-btn {
+            margin-top: 4px; padding: 6px 16px; border-radius: 16px; border: 1px solid var(--border);
+            background: var(--tab-bg); color: var(--text); cursor: pointer; font-size: 0.78rem; font-weight: 600;
+        }
+        .player-placeholder .retry-btn:hover { border-color: var(--accent); }
+
+        @media (max-width: 600px) {
+            .channels-grid { grid-template-columns: repeat(auto-fill, minmax(105px, 1fr)); gap: 7px; }
+            .channel-card { padding: 10px 6px; min-height: 115px; }
+            .channel-logo { width: 44px; height: 44px; font-size: 1.2rem; border-radius: 10px; }
+            .channel-name { font-size: 0.7rem; }
+            .header h1 { font-size: 1.3rem; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <h1>TV Online Gratis</h1>
+    <div class="subtitle">Canale TV Romania &amp; Internationale &mdash; Live Gratuit</div>
+</div>
+<div class="connection-banner" id="connBanner">📡 Fara semnal — redarea live nu va functiona</div>
+
+<div class="tabs-wrapper">
+    <div class="tabs" id="tabsContainer"></div>
+</div>
+
+<div class="search-bar">
+    <input type="text" id="searchInput" placeholder="Cauta canal TV...">
+</div>
+
+<div class="container" id="channelsContainer"></div>
+
+<div class="footer">
+    <p>Acest site nu gazduieste niciun stream. Link-urile apartin tertilor.</p>
+    <p>Creat pentru integrare in <a href="https://www.blogger.com" target="_blank">Blogger</a></p>
+</div>
+
+<div class="modal-overlay" id="modalOverlay">
+    <div class="modal">
+        <div class="modal-header">
+            <div class="ch-info">
+                <div class="mini-logo" id="modalLogo">TV</div>
+                <h3 id="modalTitle">Selecteaza un canal</h3>
+            </div>
+            <button class="modal-close" id="modalClose">&times;</button>
+        </div>
+        <div class="server-buttons" id="serverButtons"></div>
+        <div class="player-wrapper">
+            <div class="player-placeholder" id="playerPlaceholder">
+                <span class="icon">&#x1F4FA;</span>
+                <span>Apasa pe un server pentru a incepe</span>
+            </div>
+            <iframe id="playerFrame" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen style="display:none;"></iframe>
+        </div>
+    </div>
+</div>
+
+<script>
+// ============================================================
+//  DATE CANALE TV
+//  Sursele embed sunt:
+//  - tvonline123.eu/embed/player/  (embed-uri facute special pentru iframe)
+//  - Daca nu merge, incearca alt server
+//  
+//  Poti adauga/modifica canalele mai jos.
+// ============================================================
+
+const channelsData = {
+    "Principale": [
+        { name: "TVR 1", color: "#1a5fb4", quality: "HD", live: true, program: "TVR 1 Live",
+            servers: [
+                { label: "Server 1", url: "https://www.tvonline123.eu/embed/player/tvr-1" },
+                { label: "Server 2", url: "https://canale-tv.net/channel/tvr1.html" },
+                { label: "Server 3", url: "https://canale-tv.net/channel-v2/tvr1.html" }
+            ]
+        },
+        { name: "TVR 2", color: "#c62828", quality: "HD", live: true, program: "TVR 2 Live",
+            servers: [
+                { label: "Server 1", url: "https://www.tvonline123.eu/embed/player/tvr-2" },
+                { label: "Server 2", url: "https://canale-tv.net/channel/tvr2.html" },
+                { label: "Server 3", url: "https://canale-tv.net/channel-v2/tvr2.html" }
+            ]
+        },
+        { name: "TVR 3", color: "#00838f", quality: "HD", live: true, program: "TVR 3 Regional",
+            servers: [
+                { label: "Server 1", url: "https://www.tvonline123.eu/embed/player/tvr-3" },
+                { label: "Server 2", url: "https://canale-tv.net/channel/tvr3.html" }
+            ]
+        },
+        { name: "Antena 1", color: "#e53935", quality: "FHD", live: true, program: "Antena 1 Live",
+            servers: [
+                { label: "Server 1", url: "https://www.tvonline123.eu/embed/player/antena-1" },
+                { label: "Server 2", url: "https://canale-tv.net/channel/a1.html" }
+            ]
+        },
+        { name: "Pro TV", color: "#ff6f00", quality: "FHD", live: true, program: "Pro TV Romania",
+            servers: [
+                { label: "Server 1", url: "https://www.tvonline123.eu/embed/player/pro-tv" }
+            ]
+        },
+        { name: "Kanal D", color: "#1565c0", quality: "HD", live: true, program: "Kanal D Romania",
+            servers: [
+                { label: "Server 1", url: "https://www.tvonline123.eu/embed/player/kanal-d" }
+            ]
+        },
+        { name: "Prima TV", color: "#f57c00", quality: "HD", live: true, program: "Prima TV Live",
+            servers: [
+                { label: "Server 1", url: "https://www.tvonline123.eu/embed/player/prima-tv" },
+                { label: "Server 2", url: "https://canale-tv.net/channel/primatv.html" }
+            ]
+        },
+        { name: "National TV", color: "#2e7d32", quality: "HD", live: true, program: "National TV Live",
+            servers: [
+                { label: "Server 1", url: "https://www.tvonline123.eu/embed/player/national-tv" },
+                { label: "Server 2", url: "https://canale-tv.net/channel/nationaltv.html" }
+            ]
+        },
+        { name: "Acasa TV", color: "#ec407a", quality: "HD", live: true, program: "Acasa TV Live",
+            servers: [
+                { label: "Server 1", url: "https://www.tvonline123.eu/embed/player/acasa-tv" },
+                { label: "Server 2", url: "https://canale-tv.net/channel/acasatv.html" }
+            ]
+        },
+        { name: "Happy", color: "#ff6f00", quality: "HD", live: true, program: "Happy Channel",
+            servers: [
+                { label: "Server 1", url: "https://www.tvonline123.eu/embed/player/happy" },
+                { label: "Server 2", url: "https://canale-tv.net/channel/happy.html" }
+            ]
+        },
+        { name: "Antena Stars", color: "#ad1457", quality: "HD", live: true, program: "AStars Live",
+            servers: [
+                { label: "Server 1", url: "https://www.tvonline123.eu/embed/player/antena-stars" },
+                { label: "Server 2", url: "https://canale-tv.net/channel/astars.html" }
+            ]
+        }
+    ],
+    "Stiri": [
+        { name: "Digi 24", color: "#1e3a5f", quality: "FHD", live: true, program: "Digi24 Live 24/7",
+            servers: [
+                { label: "Server 1", url: "https://www.tvonline123.eu/embed/player/digi-24" },
+                { label: "Server 2", url: "https://canale-tv.net/channel/digi24.html" }
+            ]
+        },
+        { name: "Antena 3 CNN", color: "#b71c1c", quality: "FHD", live: true, program: "Antena 3 Live",
+            servers: [
+                { label: "Server 1", url: "https://www.tvonline123.eu/embed/player/antena-3" }
+            ]
+        },
+        { name: "Romania TV", color: "#0d47a1", quality: "HD", live: true, program: "Romania TV Live",
+            servers: [
+                { label: "Server 1", url: "https://www.tvonline123.eu/embed/player/romania-tv" },
+                { label: "Server 2", url: "https://canale-tv.net/channel/romaniatv.html" }
+            ]
+        },
+        { name: "Realitatea Plus", color: "#263238", quality: "HD", live: true, program: "Realitatea Live",
+            servers: [
+                { label: "Server 1", url: "https://www.tvonline123.eu/embed/player/realitatea-plus" }
+            ]
+        },
+        { name: "B1 TV", color: "#bf360c", quality: "HD", live: true, program: "B1 TV Live",
+            servers: [
+                { label: "Server 1", url: "https://www.tvonline123.eu/embed/player/b1-tv" },
+                { label: "Server 2", url: "https://canale-tv.net/channel/b1tv.html" }
+            ]
+        },
+        { name: "Aleph News", color: "#004d40", quality: "FHD", live: true, program: "Aleph News Live",
+            servers: [
+                { label: "Server 1", url: "https://www.tvonline123.eu/embed/player/aleph-news" }
+            ]
+        }
+    ],
+    "Sport": [
+        { name: "Digi Sport 1", color: "#d32f2f", quality: "FHD", live: true, program: "Digi Sport 1 Live",
+            servers: [
+                { label: "Server 1", url: "https://www.tvonline123.eu/embed/player/dgi-sport-1" }
+            ]
+        },
+        { name: "Digi Sport 2", color: "#4e342e", quality: "SD", live: true, program: "Digi Sport 2 Live",
+            servers: [
+                { label: "Server 1", url: "https://www.tvonline123.eu/embed/player/dgi-sport-2" }
+            ]
+        },
+        { name: "Eurosport 1", color: "#ff6d00", quality: "FHD", live: true, program: "Eurosport 1 Live",
+            servers: [
+                { label: "Server 1", url: "https://www.tvonline123.eu/embed/player/eurosport-1" }
+            ]
+        },
+        { name: "Eurosport 2", color: "#4caf50", quality: "FHD", live: true, program: "Eurosport 2 Live",
+            servers: [
+                { label: "Server 1", url: "https://www.tvonline123.eu/embed/player/eurosport-2" }
+            ]
+        },
+        { name: "Prima Sport 1", color: "#01579b", quality: "FHD", live: true, program: "Prima Sport 1 Live",
+            servers: [
+                { label: "Server 1", url: "https://www.tvonline123.eu/embed/player/prima-sport-1" }
+            ]
+        }
+    ],
+    "Filme": [
+        { name: "Pro Cinema", color: "#4a148c", quality: "HD", live: true, program: "Pro Cinema Live",
+            servers: [
+                { label: "Server 1", url: "https://www.tvonline123.eu/embed/player/pro-cinema" },
+                { label: "Server 2", url: "https://canale-tv.net/channel/procinema.html" }
+            ]
+        },
+        { name: "Film Now", color: "#880e4f", quality: "FHD", live: true, program: "Film Now Live",
+            servers: [
+                { label: "Server 1", url: "https://www.tvonline123.eu/embed/player/film-now" }
+            ]
+        },
+        { name: "Film Cafe", color: "#e65100", quality: "HD", live: true, program: "Film Cafe Live",
+            servers: [
+                { label: "Server 1", url: "https://www.tvonline123.eu/embed/player/film-cafe" }
+            ]
+        },
+        { name: "AXN", color: "#e65100", quality: "HD", live: true, program: "AXN Live",
+            servers: [
+                { label: "Server 1", url: "https://www.tvonline123.eu/embed/player/axn" },
+                { label: "Server 2", url: "https://canale-tv.net/channel/axn.html" }
+            ]
+        },
+        { name: "AMC", color: "#6a1b9a", quality: "HD", live: true, program: "AMC Live",
+            servers: [
+                { label: "Server 1", url: "https://www.tvonline123.eu/embed/player/amc" },
+                { label: "Server 2", url: "https://canale-tv.net/channel/amc.html" }
+            ]
+        },
+        { name: "Diva", color: "#c2185b", quality: "HD", live: true, program: "Diva Live",
+            servers: [
+                { label: "Server 1", url: "https://www.tvonline123.eu/embed/player/diva" },
+                { label: "Server 2", url: "https://canale-tv.net/channel/diva.html" }
+            ]
+        }
+    ],
+    "Muzica": [
+        { name: "Favorit TV", color: "#e65100", quality: "HD", live: true, program: "Favorit TV Live",
+            servers: [
+                { label: "Server 1", url: "https://www.tvonline123.eu/embed/player/favorit-tv" },
+                { label: "Server 2", url: "https://canale-tv.net/channel/favorit.html" }
+            ]
+        },
+        { name: "Taraf TV", color: "#bf360c", quality: "HD", live: true, program: "Taraf TV Live",
+            servers: [
+                { label: "Server 1", url: "https://www.tvonline123.eu/embed/player/taraf-tv" },
+                { label: "Server 2", url: "https://canale-tv.net/channel/taraf.html" }
+            ]
+        },
+        { name: "UTV", color: "#f57c00", quality: "HD", live: true, program: "UTV Live",
+            servers: [
+                { label: "Server 1", url: "https://www.tvonline123.eu/embed/player/utv" },
+                { label: "Server 2", url: "https://canale-tv.net/channel/utv.html" }
+            ]
+        },
+        { name: "Etno TV", color: "#2e7d32", quality: "HD", live: true, program: "Etno TV Live",
+            servers: [
+                { label: "Server 1", url: "https://www.tvonline123.eu/embed/player/etno-tv" },
+                { label: "Server 2", url: "https://canale-tv.net/channel/etno.html" }
+            ]
+        }
+    ],
+    "Documentare": [
+        { name: "Nat Geo", color: "#ffd600", quality: "HD", live: true, program: "National Geographic",
+            servers: [
+                { label: "Server 1", url: "https://www.tvonline123.eu/embed/player/nat-geo" },
+                { label: "Server 2", url: "https://canale-tv.net/channel/natgeo.html" }
+            ]
+        },
+        { name: "Discovery", color: "#1a237e", quality: "FHD", live: true, program: "Discovery Channel",
+            servers: [
+                { label: "Server 1", url: "https://www.tvonline123.eu/embed/player/discovery" }
+            ]
+        },
+        { name: "Animal Planet", color: "#33691e", quality: "HD", live: true, program: "Animal Planet",
+            servers: [
+                { label: "Server 1", url: "https://www.tvonline123.eu/embed/player/animal-planet" }
+            ]
+        },
+        { name: "History", color: "#795548", quality: "HD", live: true, program: "History Channel",
+            servers: [
+                { label: "Server 1", url: "https://www.tvonline123.eu/embed/player/history" }
+            ]
+        },
+        { name: "TLC", color: "#e91e63", quality: "HD", live: true, program: "TLC Live",
+            servers: [
+                { label: "Server 1", url: "https://www.tvonline123.eu/embed/player/tlc" },
+                { label: "Server 2", url: "https://canale-tv.net/channel/tlc.html" }
+            ]
+        },
+        { name: "Paprika", color: "#4caf50", quality: "HD", live: true, program: "Paprika TV",
+            servers: [
+                { label: "Server 1", url: "https://www.tvonline123.eu/embed/player/paprika" },
+                { label: "Server 2", url: "https://canale-tv.net/channel/paprika.html" }
+            ]
+        }
+    ],
+    "Copii": [
+        { name: "Disney", color: "#1565c0", quality: "FHD", live: true, program: "Disney Channel",
+            servers: [
+                { label: "Server 1", url: "https://www.tvonline123.eu/embed/player/disney" }
+            ]
+        },
+        { name: "Cartoon Network", color: "#e53935", quality: "FHD", live: true, program: "Cartoon Network",
+            servers: [
+                { label: "Server 1", url: "https://www.tvonline123.eu/embed/player/cartoon-network" }
+            ]
+        },
+        { name: "Nickelodeon", color: "#ff6f00", quality: "HD", live: true, program: "Nickelodeon",
+            servers: [
+                { label: "Server 1", url: "https://www.tvonline123.eu/embed/player/nickelodeon" },
+                { label: "Server 2", url: "https://canale-tv.net/channel/nickelodeon.html" }
+            ]
+        },
+        { name: "Minimax", color: "#00acc1", quality: "HD", live: true, program: "Minimax",
+            servers: [
+                { label: "Server 1", url: "https://www.tvonline123.eu/embed/player/minimax" },
+                { label: "Server 2", url: "https://canale-tv.net/channel/minimax.html" }
+            ]
+        },
+        { name: "Duck TV", color: "#ff7043", quality: "HD", live: true, program: "Duck TV",
+            servers: [
+                { label: "Server 1", url: "https://www.tvonline123.eu/embed/player/duck-tv" },
+                { label: "Server 2", url: "https://canale-tv.net/channel/ducktv.html" }
+            ]
+        },
+        { name: "JimJam", color: "#8e24aa", quality: "HD", live: true, program: "JimJam",
+            servers: [
+                { label: "Server 1", url: "https://www.tvonline123.eu/embed/player/jimjam" },
+                { label: "Server 2", url: "https://canale-tv.net/channel/jimjam.html" }
+            ]
+        }
+    ]
+};
+
+// ============================================================
+//  LOGICA
+// ============================================================
+let activeCategory = "Toate";
+let searchQuery = "";
+
+function getLogoText(name) {
+    const words = name.split(' ');
+    if (words.length >= 2) return (words[0][0] + words[1][0]).toUpperCase();
+    return name.substring(0, 2).toUpperCase();
+}
+
+function buildTabs() {
+    const tc = document.getElementById('tabsContainer');
+    const all = Object.values(channelsData).flat();
+    const tabs = [{ name: "Toate", count: all.length }];
+    for (const [cat, chs] of Object.entries(channelsData)) tabs.push({ name: cat, count: chs.length });
+    tc.innerHTML = tabs.map(t =>
+        `<div class="tab${t.name===activeCategory?' active':''}" data-cat="${t.name}">${t.name} <span class="count">${t.count}</span></div>`
+    ).join('');
+    tc.querySelectorAll('.tab').forEach(tab => tab.addEventListener('click', () => {
+        activeCategory = tab.dataset.cat;
+        tc.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        renderChannels();
+    }));
+}
+
+function renderChannels() {
+    const container = document.getElementById('channelsContainer');
+    let html = '';
+    const entries = activeCategory === 'Toate' ? Object.entries(channelsData) : [[activeCategory, channelsData[activeCategory]||[]]];
+    for (const [cat, channels] of entries) {
+        let filtered = searchQuery ? channels.filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase())) : channels;
+        if (!filtered.length) continue;
+        if (activeCategory === 'Toate') html += `<div class="category-title">${cat}</div>`;
+        html += '<div class="channels-grid">';
+        filtered.forEach((ch, idx) => {
+            const logoText = getLogoText(ch.name);
+            const sc = ch.servers ? ch.servers.length : 0;
+            html += `<div class="channel-card" data-cat="${cat}" data-idx="${idx}" title="${ch.name} - ${ch.program||''}">
+                <div class="channel-logo" style="background:${ch.color}">${logoText}${ch.live?'<span class="live-dot"></span>':''}<span class="quality-badge quality-${ch.quality}">${ch.quality}</span></div>
+                <div class="channel-name">${ch.name}</div>${ch.program?`<div class="channel-program">${ch.program}</div>`:''}${sc>1?`<span class="server-count">${sc} servere</span>`:''}</div>`;
+        });
+        html += '</div>';
+    }
+    if (!html) html = '<div style="text-align:center;padding:50px 20px;color:var(--text-muted);font-size:0.9rem;">Niciun canal gasit.</div>';
+    container.innerHTML = html;
+    container.querySelectorAll('.channel-card').forEach(card => card.addEventListener('click', () => {
+        const ch = channelsData[card.dataset.cat][parseInt(card.dataset.idx)];
+        openPlayer(ch);
+    }));
+}
+
+// ========== MODAL ==========
+let currentChannel = null;
+let activeServerIndex = 0;
+
+function openPlayer(channel) {
+    currentChannel = channel;
+    activeServerIndex = 0;
+    const overlay = document.getElementById('modalOverlay');
+    document.getElementById('modalTitle').textContent = channel.name;
+    const logo = document.getElementById('modalLogo');
+    logo.textContent = getLogoText(channel.name);
+    logo.style.background = channel.color;
+    renderServerButtons();
+    loadServer(0);
+    overlay.classList.add('active');
+    document.body.style.overflow = 'hidden';
+}
+
+function renderServerButtons() {
+    const container = document.getElementById('serverButtons');
+    const servers = currentChannel.servers || [];
+    if (servers.length <= 1) { container.innerHTML = ''; return; }
+    container.innerHTML = servers.map((s, i) =>
+        `<button class="server-btn${i===activeServerIndex?' active':''}" data-idx="${i}">${s.label}</button>`
+    ).join('');
+    container.querySelectorAll('.server-btn').forEach(btn => btn.addEventListener('click', () => {
+        activeServerIndex = parseInt(btn.dataset.idx);
+        renderServerButtons();
+        loadServer(activeServerIndex);
+    }));
+}
+
+function loadServer(index) {
+    const frame = document.getElementById('playerFrame');
+    const ph = document.getElementById('playerPlaceholder');
+    const servers = currentChannel.servers || [];
+    if (!servers.length || !servers[index]) return;
+
+    if (!navigator.onLine) {
+        ph.className = 'player-placeholder error';
+        ph.innerHTML = '<span class="icon">📡</span><span>Fara semnal — redarea live are nevoie de internet</span>';
+        ph.style.display = 'flex';
+        frame.style.display = 'none';
+        return;
+    }
+
+    ph.className = 'player-placeholder';
+    ph.innerHTML = '<span class="icon">📺</span><span>Se incarca...</span>';
+    ph.style.display = 'flex';
+    frame.style.display = 'none';
+    frame.src = servers[index].url;
+
+    const loadToken = Symbol();
+    frame.dataset.loadToken = loadToken.toString();
+    const watchdog = setTimeout(() => {
+        ph.className = 'player-placeholder error';
+        ph.innerHTML = '<span class="icon">⚠</span><span>Acest server nu raspunde. Incearca alt server sau reincearca.</span><button class="retry-btn" id="retryServerBtn">↻ Reincearca</button>';
+        ph.style.display = 'flex';
+        const retryBtn = document.getElementById('retryServerBtn');
+        if (retryBtn) retryBtn.addEventListener('click', () => loadServer(index));
+    }, 8000);
+
+    frame.onload = () => {
+        clearTimeout(watchdog);
+        ph.style.display = 'none';
+        frame.style.display = 'block';
+    };
+}
+
+function closePlayer() {
+    const overlay = document.getElementById('modalOverlay');
+    const frame = document.getElementById('playerFrame');
+    document.getElementById('serverButtons').innerHTML = '';
+    overlay.classList.remove('active');
+    document.body.style.overflow = '';
+    setTimeout(() => { frame.src = ''; }, 300);
+    currentChannel = null;
+}
+
+document.getElementById('modalClose').addEventListener('click', closePlayer);
+document.getElementById('modalOverlay').addEventListener('click', e => { if (e.target===e.currentTarget) closePlayer(); });
+document.addEventListener('keydown', e => { if (e.key==='Escape') closePlayer(); });
+document.getElementById('searchInput').addEventListener('input', e => { searchQuery = e.target.value.trim(); renderChannels(); });
+
+// ============================================================
+// BANNER ONLINE/OFFLINE - util cu semnal slab/intermitent
+// ============================================================
+const connBanner = document.getElementById('connBanner');
+function updateConnBanner() {
+    connBanner.classList.toggle('visible', !navigator.onLine);
+}
+window.addEventListener('online', updateConnBanner);
+window.addEventListener('offline', updateConnBanner);
+updateConnBanner();
+
+buildTabs();
+renderChannels();
+</script>
+</body>
+</html>

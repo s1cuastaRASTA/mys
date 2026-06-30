@@ -1,13 +1,25 @@
 {
   "name": "TV Online Gratis",
   "short_name": "TV Online",
-  "start_url": ".",
-  "display": "minimal-ui",
+  "description": "Canale TV live Romania si international, intr-un singur loc.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
   "background_color": "#0b0b12",
   "theme_color": "#0b0b12",
-  "icons": [{
-    "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='0.9em' font-size='90'>📺</text></svg>",
-    "sizes": "100x100",
-    "type": "image/svg+xml"
-  }]
+  "icons": [
+    {
+      "src": "tv-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "tv-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
 }
