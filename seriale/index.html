@@ -216,8 +216,6 @@
         <h3>Adauga episod</h3>
         <label>Link video (ok.ru/videoembed/...)</label>
         <input type="text" id="addLink" placeholder="https://ok.ru/videoembed/...">
-        <label>Titlu</label>
-        <input type="text" id="addTitle" placeholder="ex: Episodul 5">
         <label>Numar sezon</label>
         <input type="text" id="addSeason" placeholder="ex: 16">
         <label>Numar episod</label>
@@ -581,7 +579,6 @@ addFormOverlay.addEventListener('click', e => { if (e.target === addFormOverlay)
 
 function clearAddForm() {
     document.getElementById('addLink').value = '';
-    document.getElementById('addTitle').value = '';
     document.getElementById('addNum').value = '';
     document.getElementById('addSeason').value = '';
     document.getElementById('addDate').value = '';
@@ -589,9 +586,9 @@ function clearAddForm() {
 
 addSave.addEventListener('click', () => {
     let link = document.getElementById('addLink').value.trim();
-    const title = document.getElementById('addTitle').value.trim() || 'Episod';
     const num = document.getElementById('addNum').value.trim() || '';
     const seasonNum = document.getElementById('addSeason').value.trim() || '?';
+    const title = num ? ('Episodul ' + num) : 'Episod';
     const dateVal = document.getElementById('addDate').value;
     if (!link) return alert('Introdu link-ul video!');
     const m = link.match(/ok\.ru\/video\/(\d+)/);
