@@ -292,15 +292,15 @@ const SERIES = {
                 ]
             },
             {
-                id: -5, name: 'Sezonul 3 (Dailymotion)', episodes: [
-                    { id:'bs3e1', title:'Episodul 1', date:new Date('2013-03-01'), num:'1', sources:['https://www.dailymotion.com/embed/video/xzfjnq'] },
-                    { id:'bs3e2', title:'Episodul 2', date:new Date('2013-03-08'), num:'2', sources:['https://www.dailymotion.com/embed/video/xzfny1'] },
-                    { id:'bs3e3', title:'Episodul 3', date:new Date('2013-03-15'), num:'3', sources:['https://www.dailymotion.com/embed/video/xzflij'] },
-                    { id:'bs3e4', title:'Episodul 4', date:new Date('2013-03-22'), num:'4', sources:['https://www.dailymotion.com/embed/video/xzflqw'] },
-                    { id:'bs3e5', title:'Episodul 5', date:new Date('2013-03-29'), num:'5', sources:['https://www.dailymotion.com/embed/video/xzfm1i'] },
-                    { id:'bs3e6', title:'Episodul 6', date:new Date('2013-04-05'), num:'6', sources:['https://www.dailymotion.com/embed/video/xzfmp7'] },
-                    { id:'bs3e7', title:'Episodul 7', date:new Date('2013-04-12'), num:'7', sources:['https://www.dailymotion.com/embed/video/xzfmzp'] },
-                    { id:'bs3e8', title:'Episodul 8', date:new Date('2013-04-19'), num:'8', sources:['https://www.dailymotion.com/embed/video/xzbnkq'] },
+                id: -5, name: 'Sezonul 3 (Dailymotion + Mail.ru)', episodes: [
+                    { id:'bs3e1', title:'Episodul 1', date:new Date('2013-03-01'), num:'1', sources:['https://my.mail.ru/video/embed/2767336673938245136','https://www.dailymotion.com/embed/video/xzfjnq'] },
+                    { id:'bs3e2', title:'Episodul 2', date:new Date('2013-03-08'), num:'2', sources:['https://my.mail.ru/video/embed/2767336673938245137','https://www.dailymotion.com/embed/video/xzfny1'] },
+                    { id:'bs3e3', title:'Episodul 3', date:new Date('2013-03-15'), num:'3', sources:['https://my.mail.ru/video/embed/2767336673938245138','https://www.dailymotion.com/embed/video/xzflij'] },
+                    { id:'bs3e4', title:'Episodul 4', date:new Date('2013-03-22'), num:'4', sources:['https://my.mail.ru/video/embed/2767336673938245139','https://www.dailymotion.com/embed/video/xzflqw'] },
+                    { id:'bs3e5', title:'Episodul 5', date:new Date('2013-03-29'), num:'5', sources:['https://my.mail.ru/video/embed/2767336673938245140','https://www.dailymotion.com/embed/video/xzfm1i'] },
+                    { id:'bs3e6', title:'Episodul 6', date:new Date('2013-04-05'), num:'6', sources:['https://my.mail.ru/video/embed/2767336673938245141','https://www.dailymotion.com/embed/video/xzfmp7'] },
+                    { id:'bs3e7', title:'Episodul 7', date:new Date('2013-04-12'), num:'7', sources:['https://my.mail.ru/video/embed/2767336673938245142','https://www.dailymotion.com/embed/video/xzfmzp'] },
+                    { id:'bs3e8', title:'Episodul 8', date:new Date('2013-04-19'), num:'8', sources:['https://my.mail.ru/video/embed/2767336673938245143','https://www.dailymotion.com/embed/video/xzbnkq'] },
                     { id:'bs3e9', title:'Episodul 9', date:new Date('2013-04-26'), num:'9', sources:['https://www.dailymotion.com/embed/video/xziop9'] }
                 ]
             },
@@ -321,6 +321,17 @@ const SERIES = {
                 id: -8, name: 'Sezonul 6 (Mail.ru)', episodes: [
                     { id:'mre9', title:'Episodul 9', date:new Date('2015-01-01'), num:'9', sources:['https://my.mail.ru/gmail.com/clicksud.com/video/embed/_myvideo/1240'] },
                     { id:'mre10', title:'Episodul 10', date:new Date('2015-01-02'), num:'10', sources:['https://my.mail.ru/gmail.com/clicksud.com/video/embed/_myvideo/1244'] }
+                ]
+            },
+            {
+                id: -40, name: 'Sezonul 7 (Mail.ru)', episodes: [
+                    { id:'mre12', title:'Episodul 12', date:new Date('2016-01-01'), num:'12', sources:['https://my.mail.ru/video/embed/3414070534382551817'] }
+                ]
+            },
+            {
+                id: -41, name: 'Sezonul 24 (Mail.ru)', episodes: [
+                    { id:'mre29', title:'Episodul 29', date:new Date('2020-01-01'), num:'29', sources:['https://my.mail.ru/video/embed/8052177426383372289'] },
+                    { id:'mre30', title:'Episodul 30', date:new Date('2020-01-02'), num:'30', sources:['https://my.mail.ru/video/embed/8052177426383372291'] }
                 ]
             },
             {
@@ -643,6 +654,7 @@ function renderServerButtons() {
         else if (s.includes('dailymotion')) label = 'Dailymotion';
         else if (s.includes('ok.ru')) label = 'OK.ru';
         else if (s.includes('odysee')) label = 'Odysee';
+        else if (s.includes('mail.ru')) label = 'Mail.ru';
         return `<button class="server-btn${i===activeSource?' active':''}" data-idx="${i}">${label}</button>`;
     }).join('') + '<button class="refresh-btn" id="refreshBtn">↻</button>';
     container.querySelectorAll('.server-btn').forEach(btn => {
