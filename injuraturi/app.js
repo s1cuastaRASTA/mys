@@ -4,9 +4,14 @@ import {
   getDatabase, ref, push, set, update, get, onValue,
   query, orderByChild, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+import {
+  getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword,
+  GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
+const auth = getAuth(app);
 
 /* -------------------------------------------------------------
    FILTRU DE MODERARE
@@ -30,13 +35,30 @@ function containsHateSpeech(text) {
 let currentNick = localStorage.getItem('roastarena_nick') || '';
 let currentRoom = 'general';
 let roomsCache = { general: { name: '#general' } };
+let currentUid = null;
 
 const gate = document.getElementById('gate');
 const appEl = document.getElementById('app');
 const nickInput = document.getElementById('nickInput');
 const enterBtn = document.getElementById('enterBtn');
+const nickTakenWarning = document.getElementById('nickTakenWarning');
 const whoNick = document.getElementById('whoNick');
 const changeNickBtn = document.getElementById('changeNick');
+const signOutBtn = document.getElementById('signOutBtn');
+
+const quickEntryBox = document.getElementById('quickEntryBox');
+const accountBox = document.getElementById('accountBox');
+const claimNicknameBox = document.getElementById('claimNicknameBox');
+const tabLogin = document.getElementById('tabLogin');
+const tabSignup = document.getElementById('tabSignup');
+const emailInput = document.getElementById('emailInput');
+const passwordInput = document.getElementById('passwordInput');
+const emailAuthBtn = document.getElementById('emailAuthBtn');
+const googleBtn = document.getElementById('googleBtn');
+const authError = document.getElementById('authError');
+const claimNickInput = document.getElementById('claimNickInput');
+const claimNickBtn = document.getElementById('claimNickBtn');
+const claimError = document.getElementById('claimError');
 
 const roomList = document.getElementById('roomList');
 const newRoomName = document.getElementById('newRoomName');
@@ -60,25 +82,142 @@ const roomView = document.getElementById('roomView');
 const leaderboardView = document.getElementById('leaderboardView');
 const leaderboardContent = document.getElementById('leaderboardContent');
 
-function enterArena(nick) {
+function resetGateView() {
+  quickEntryBox.classList.remove('hidden');
+  accountBox.classList.remove('hidden');
+  claimNicknameBox.classList.add('hidden');
+  authError.classList.add('hidden');
+  claimError.classList.add('hidden');
+  nickTakenWarning.classList.add('hidden');
+}
+
+function enterArena(nick, uid) {
   currentNick = nick.trim().slice(0, 24);
   if (!currentNick) return;
-  localStorage.setItem('roastarena_nick', currentNick);
-  whoNick.textContent = currentNick;
+  currentUid = uid || null;
+  if (!uid) localStorage.setItem('roastarena_nick', currentNick);
+  whoNick.textContent = currentNick + (uid ? ' 🔒' : '');
+  signOutBtn.classList.toggle('hidden', !uid);
   gate.classList.add('hidden');
   appEl.classList.remove('hidden');
   listenRooms();
   switchRoom('general');
 }
 
+async function tryQuickEntry(nick) {
+  nick = nick.trim().slice(0, 24);
+  if (!nick) return;
+  const claimSnap = await get(ref(db, `nicknames/${nick.toLowerCase()}`));
+  if (claimSnap.exists()) {
+    nickTakenWarning.classList.remove('hidden');
+    return;
+  }
+  enterArena(nick, null);
+}
+
 if (currentNick) {
   nickInput.value = currentNick;
 }
-enterBtn.addEventListener('click', () => enterArena(nickInput.value));
-nickInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') enterArena(nickInput.value); });
+enterBtn.addEventListener('click', () => tryQuickEntry(nickInput.value));
+nickInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') tryQuickEntry(nickInput.value); });
+
 changeNickBtn.addEventListener('click', () => {
   appEl.classList.add('hidden');
   gate.classList.remove('hidden');
+  resetGateView();
+});
+
+signOutBtn.addEventListener('click', async () => {
+  await signOut(auth);
+  appEl.classList.add('hidden');
+  gate.classList.remove('hidden');
+  resetGateView();
+});
+
+/* ---------------- ACCOUNT: EMAIL/PASSWORD + GOOGLE ---------------- */
+
+let authMode = 'login';
+tabLogin.addEventListener('click', () => {
+  authMode = 'login';
+  tabLogin.classList.add('active');
+  tabSignup.classList.remove('active');
+  emailAuthBtn.textContent = 'autentificare';
+});
+tabSignup.addEventListener('click', () => {
+  authMode = 'signup';
+  tabSignup.classList.add('active');
+  tabLogin.classList.remove('active');
+  emailAuthBtn.textContent = 'creează cont';
+});
+
+function friendlyAuthError(code) {
+  const map = {
+    'auth/invalid-email': 'email invalid.',
+    'auth/email-already-in-use': 'există deja un cont cu acest email — încearcă autentificare.',
+    'auth/weak-password': 'parola trebuie să aibă cel puțin 6 caractere.',
+    'auth/invalid-credential': 'email sau parolă greșite.',
+    'auth/wrong-password': 'email sau parolă greșite.',
+    'auth/user-not-found': 'nu există cont cu acest email — încearcă "cont nou".',
+    'auth/popup-closed-by-user': 'fereastra Google a fost închisă înainte de autentificare.',
+  };
+  return map[code] || 'ceva n-a mers. încearcă din nou.';
+}
+
+emailAuthBtn.addEventListener('click', async () => {
+  const email = emailInput.value.trim();
+  const password = passwordInput.value;
+  authError.classList.add('hidden');
+  if (!email || !password) return;
+  try {
+    if (authMode === 'signup') {
+      await createUserWithEmailAndPassword(auth, email, password);
+    } else {
+      await signInWithEmailAndPassword(auth, email, password);
+    }
+    // onAuthStateChanged preia de aici
+  } catch (err) {
+    authError.textContent = friendlyAuthError(err.code);
+    authError.classList.remove('hidden');
+  }
+});
+
+googleBtn.addEventListener('click', async () => {
+  authError.classList.add('hidden');
+  try {
+    await signInWithPopup(auth, new GoogleAuthProvider());
+  } catch (err) {
+    authError.textContent = friendlyAuthError(err.code);
+    authError.classList.remove('hidden');
+  }
+});
+
+onAuthStateChanged(auth, async (user) => {
+  if (!user) return;
+  const userSnap = await get(ref(db, `users/${user.uid}`));
+  const userData = userSnap.val();
+  if (userData && userData.nickname) {
+    enterArena(userData.nickname, user.uid);
+  } else {
+    quickEntryBox.classList.add('hidden');
+    accountBox.classList.add('hidden');
+    claimNicknameBox.classList.remove('hidden');
+  }
+});
+
+claimNickBtn.addEventListener('click', async () => {
+  const nick = claimNickInput.value.trim().slice(0, 24);
+  claimError.classList.add('hidden');
+  if (!nick || !auth.currentUser) return;
+  const key = nick.toLowerCase();
+  const existing = await get(ref(db, `nicknames/${key}`));
+  if (existing.exists() && existing.val() !== auth.currentUser.uid) {
+    claimError.textContent = 'poreclă deja luată de altcineva. alege alta.';
+    claimError.classList.remove('hidden');
+    return;
+  }
+  await set(ref(db, `nicknames/${key}`), auth.currentUser.uid);
+  await set(ref(db, `users/${auth.currentUser.uid}`), { nickname: nick, email: auth.currentUser.email || null });
+  enterArena(nick, auth.currentUser.uid);
 });
 
 /* ---------------- ROOMS ---------------- */

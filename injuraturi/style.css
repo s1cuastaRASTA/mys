@@ -103,6 +103,45 @@ input{ font-family: var(--font-mono); }
 }
 .gate-rules span{ text-decoration: underline dotted; cursor: default; }
 
+.divider{
+  display:flex; align-items:center; gap: 10px;
+  margin: 22px 0 18px;
+  color: var(--text-faint);
+  font-size: 11px;
+}
+.divider::before, .divider::after{
+  content:'';
+  flex:1;
+  height: 1px;
+  background: var(--line);
+}
+
+.account-tabs{ display:flex; gap: 6px; margin-bottom: 12px; }
+.tab{
+  flex:1;
+  padding: 8px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--text-faint);
+  font-size: 12px;
+}
+.tab.active{ border-color: var(--flame-1); color: var(--ember); }
+
+#accountBox input, #claimNicknameBox input{
+  width:100%;
+  padding: 12px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--bg-input);
+  color: var(--text);
+  font-size: 14px;
+  margin-bottom: 10px;
+  outline:none;
+}
+#accountBox input:focus, #claimNicknameBox input:focus{ border-color: var(--flame-1); }
+#accountBox .btn-flame{ margin-bottom: 10px; }
+
 /* APP SHELL */
 .topbar{
   display:flex; align-items:center; justify-content:space-between;

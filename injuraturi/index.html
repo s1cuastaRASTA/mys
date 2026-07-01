@@ -16,8 +16,34 @@
     <p class="gate-eyebrow">// bine ai venit pe</p>
     <h1 class="logo">#injuraturi</h1>
     <p class="gate-sub">arena liberă de roast. alegi o poreclă, intri, dai cu mișto. comunitatea votează.</p>
-    <input id="nickInput" type="text" placeholder="poreclă (ex: NebunuDinBlocB4)" maxlength="24" autocomplete="off">
-    <button id="enterBtn" class="btn-flame">intră în arenă</button>
+
+    <div id="quickEntryBox">
+      <input id="nickInput" type="text" placeholder="poreclă (ex: NebunuDinBlocB4)" maxlength="24" autocomplete="off">
+      <button id="enterBtn" class="btn-flame">intră rapid, fără cont</button>
+      <p id="nickTakenWarning" class="filter-warning hidden">poreclă asta e revendicată de un cont. alege alta sau autentifică-te mai jos.</p>
+    </div>
+
+    <div class="divider"><span>sau cu cont, ca să-ți protejezi porecla</span></div>
+
+    <div id="accountBox">
+      <div class="account-tabs">
+        <button id="tabLogin" class="tab active" type="button">autentificare</button>
+        <button id="tabSignup" class="tab" type="button">cont nou</button>
+      </div>
+      <input id="emailInput" type="email" placeholder="email" autocomplete="email">
+      <input id="passwordInput" type="password" placeholder="parolă (min. 6 caractere)" autocomplete="current-password">
+      <button id="emailAuthBtn" class="btn-flame">autentificare</button>
+      <button id="googleBtn" class="btn-ghost full">continuă cu Google</button>
+      <p id="authError" class="filter-warning hidden"></p>
+    </div>
+
+    <div id="claimNicknameBox" class="hidden">
+      <p class="gate-sub" style="margin-bottom:12px;">cont conectat. alege porecla ta — rămâne legată de acest cont, nimeni altcineva n-o mai poate folosi.</p>
+      <input id="claimNickInput" type="text" placeholder="poreclă (ex: NebunuDinBlocB4)" maxlength="24" autocomplete="off">
+      <button id="claimNickBtn" class="btn-flame">revendică porecla și intră</button>
+      <p id="claimError" class="filter-warning hidden"></p>
+    </div>
+
     <p class="gate-rules">reguli: fără atacuri pe bază de rasă, etnie, orientare sau dizabilitate. restul e liber. <span id="rulesMore">detalii</span></p>
   </div>
 </div>
@@ -28,6 +54,7 @@
     <span class="logo-small">#injuraturi</span>
     <div class="who">
       <span id="whoNick" class="who-nick"></span>
+      <button id="signOutBtn" class="btn-ghost hidden">deconectare</button>
       <button id="changeNick" class="btn-ghost">schimbă porecla</button>
     </div>
   </header>
