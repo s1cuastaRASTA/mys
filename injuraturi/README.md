@@ -24,9 +24,9 @@ Firebase Realtime Database face asta gratuit, fără server propriu.
    pe care ți-l arată.
 3. Deschide `firebase-config.js` din acest proiect și înlocuiește valorile
    placeholder cu cele copiate.
-4. In meniul din stânga (poate apărea ca "Build" sau "Databases & Storage",
-   depinde de versiunea consolei): **Realtime Database → Create Database**.
-   Alege orice regiune, pornește în **test mode**.
+4. In meniul din stânga: **Build → Realtime Database → Create Database**.
+   Alege orice regiune, pornește în **test mode** (permite citire/scriere
+   fără autentificare — e suficient pentru un proiect mic/prieteni).
 5. După ce ai testat că totul merge, e recomandat să restrângi puțin regulile
    din tab-ul **Rules**, ca să nu poată oricine șterge tot din greșeală:
 
@@ -47,24 +47,11 @@ Firebase Realtime Database face asta gratuit, fără server propriu.
 ```
 
 Astea sunt reguli minimale (oricine poate scrie) — potrivite pentru un
-proiect mic cu prieteni.
+proiect mic cu prieteni. Dacă vrei protecție reală împotriva spam-ului sau
+a atacurilor, ai nevoie de Firebase Authentication (autentificare anonimă),
+ceea ce e un pas în plus pe care ți-l pot adăuga dacă vrei.
 
-## Pasul 2 — activează conturile (email/parolă + Google)
-
-Aplicația permite intrare rapidă cu poreclă (fără cont) SAU cu cont, ca
-să-ți protejezi porecla — odată revendicată de un cont, nimeni altcineva n-o
-mai poate folosi la intrarea rapidă. Ca partea de cont să funcționeze:
-
-1. In consola Firebase, mergi la **Authentication** (poate apărea sub
-   "Build" sau sub "Security", depinde de versiune) → tab-ul **Sign-in method**.
-2. Activează providerul **Email/Password** → Save.
-3. Activează providerul **Google** → alege un email de suport → Save.
-4. Mergi la **Settings → Authorized domains** și adaugă domeniul unde va fi
-   live site-ul, de tipul `<username-ul-tau>.github.io` (fără `https://` și
-   fără calea repo-ului). Fără acest pas, "continuă cu Google" nu merge pe
-   site-ul live (pe `localhost`, la testare locală, e deja autorizat automat).
-
-## Pasul 3 — pune-l live pe GitHub Pages
+## Pasul 2 — pune-l live pe GitHub Pages
 
 1. Creează un repo nou pe GitHub (poate fi public).
 2. Urcă toate fișierele din acest folder (`index.html`, `style.css`,
@@ -99,8 +86,9 @@ funcțional.
 
 ## Idei de extins mai departe
 
+- Autentificare anonimă Firebase, ca să nu poată cineva să fure porecla
+  altcuiva și să posteze in numele lui.
 - Notificări/sunete când ești provocat la duel.
 - Reset automat săptămânal al clasamentului (acum e cumulativ pe toate
   mesajele din istoric).
 - Buton de raportare pe fiecare mesaj, vizibil doar ție ca admin.
-- Resetare parolă ("am uitat parola") pentru contul cu email.

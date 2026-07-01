@@ -289,10 +289,68 @@ input{ font-family: var(--font-mono); }
 }
 #msgInput:focus{ border-color: var(--flame-1); }
 
+.notification{
+  background: #33251c;
+  border: 1px solid var(--flame-1);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+}
+
 .filter-warning{
   color: var(--danger);
   font-size: 12px;
   margin-top: 10px;
+}
+
+#presenceList .room-item{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+}
+
+#presenceList .presence-online{
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #6adea0;
+}
+
+#presenceList .presence-offline{
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #8a7b6b;
+}
+
+.admin-filters{
+  margin-top: 18px;
+  border-top: 1px solid var(--line);
+  padding-top: 16px;
+}
+
+.filter-tag{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  background: var(--bg-input);
+  border:1px solid var(--line);
+  border-radius: 999px;
+  padding: 6px 10px;
+  margin: 4px 4px 0 0;
+  font-size: 12px;
+}
+
+.filter-tag button{
+  background: transparent;
+  border: none;
+  color: var(--danger);
+  cursor: pointer;
+}
+
+.modal-box button.small{
+  width: auto;
 }
 
 /* MODAL */

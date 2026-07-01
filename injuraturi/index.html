@@ -16,6 +16,7 @@
     <p class="gate-eyebrow">// bine ai venit pe</p>
     <h1 class="logo">#injuraturi</h1>
     <p class="gate-sub">arena liberă de roast. alegi o poreclă, intri, dai cu mișto. comunitatea votează.</p>
+    <p id="localWarning" class="filter-warning hidden" style="margin-top:10px;">Nu poți folosi autentificarea Firebase din fișiere locale (file://). Folosește un server local sau GitHub Pages.</p>
 
     <div id="quickEntryBox">
       <input id="nickInput" type="text" placeholder="poreclă (ex: NebunuDinBlocB4)" maxlength="24" autocomplete="off">
@@ -59,6 +60,7 @@
     <span class="logo-small">#injuraturi</span>
     <div class="who">
       <span id="whoNick" class="who-nick"></span>
+      <button id="profileBtn" class="btn-ghost">profil</button>
       <button id="signOutBtn" class="btn-ghost hidden">deconectare</button>
       <button id="changeNick" class="btn-ghost">schimbă porecla</button>
     </div>
@@ -76,6 +78,10 @@
         </div>
       </div>
       <div class="sidebar-section">
+        <p class="sidebar-title">participanți în cameră</p>
+        <div id="presenceList" class="room-list"></div>
+      </div>
+      <div class="sidebar-section">
         <button id="leaderboardBtn" class="btn-ghost full">🏆 clasament & badge-uri</button>
         <button id="adminBtn" class="btn-ghost full hidden" style="margin-top:8px; border-color:var(--danger); color:var(--danger);">🛡️ panou admin</button>
       </div>
@@ -84,9 +90,13 @@
     <main class="main">
 
       <div id="roomView">
+        <div id="roomNotification" class="notification hidden"></div>
         <div class="room-header">
           <h2 id="roomTitle">#general</h2>
-          <button id="duelBtn" class="btn-flame small">⚔️ provoacă la duel</button>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <button id="shareRoomBtn" class="btn-ghost small">🔗 partajează camera</button>
+            <button id="duelBtn" class="btn-flame small">⚔️ provoacă la duel</button>
+          </div>
         </div>
 
         <div id="feed" class="feed"></div>
@@ -112,9 +122,26 @@
           <button id="backToRoomFromAdminBtn" class="btn-ghost">înapoi în cameră</button>
         </div>
         <div id="adminContent"></div>
+        <div class="admin-filters">
+          <h3>⚠️ filtre de moderare</h3>
+          <p style="color:var(--text-faint); font-size:12px; margin:0 0 10px;">Adaugă expresii sau regex care blochează automat mesaje cu ură reală.</p>
+          <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px;">
+            <input id="newFilterInput" type="text" placeholder="ex: /gay|lesbian/i sau queer" maxlength="120" style="flex:1; min-width:180px;">
+            <button id="addFilterBtn" class="btn-ghost">+ adaugă</button>
+          </div>
+          <div id="filterList"></div>
+          <p id="filterAdminMsg" style="color:var(--text-faint); font-size:12px; margin-top:10px;"></p>
+        </div>
       </div>
 
     </main>
+  </div>
+</div>
+
+<div id="profileModal" class="modal hidden">
+  <div class="modal-box">
+    <button id="closeProfileModal" class="btn-ghost small" style="margin-bottom:12px;">înapoi</button>
+    <div id="profileContent"></div>
   </div>
 </div>
 
