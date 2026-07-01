@@ -1,12 +1,13 @@
 import { firebaseConfig } from './firebase-config.js';
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
-  getDatabase, ref, push, set, update, get, onValue,
+  getDatabase, ref, push, set, update, remove, get, onValue,
   query, orderByChild, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 import {
   getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword,
-  GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut
+  GoogleAuthProvider, signInWithPopup, signInAnonymously,
+  sendPasswordResetEmail, onAuthStateChanged, signOut
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
 const app = initializeApp(firebaseConfig);
@@ -14,20 +15,75 @@ const db = getDatabase(app);
 const auth = getAuth(app);
 
 /* -------------------------------------------------------------
+   CONFIG DE MODERARE
+   Pentru rate-limiting: câte secunde minim între două mesaje.
+------------------------------------------------------------- */
+const SEND_COOLDOWN_MS = 3000;
+
+/* Cheie opțională Perspective API (Google/Jigsaw) pentru detecție de
+   toxicitate/ură mai bună decât o listă fixă de cuvinte. Lasă gol ca
+   să folosești doar filtrul de cuvinte de mai jos. Detalii în README. */
+const PERSPECTIVE_API_KEY = '';
+
+/* -------------------------------------------------------------
    FILTRU DE MODERARE
    Nu blocăm cuvintele grele / injurăturile "clasice" — sunt punctul
    central al aplicației. Blocăm doar limbajul de ură reală (atacuri
    pe bază de rasă, etnie, orientare sexuală, dizabilitate).
    Adaugă propriile tale cuvinte/expresii (regex, case-insensitive)
-   in lista de mai jos. Pentru o detecție mai bună decât o listă
-   fixă, vezi sugestia din README.md despre integrarea Perspective API.
+   in lista de mai jos.
 ------------------------------------------------------------- */
 const HATE_SPEECH_PATTERNS = [
   // exemplu: /cuvant-interzis/i,
 ];
 
-function containsHateSpeech(text) {
-  return HATE_SPEECH_PATTERNS.some((pattern) => pattern.test(text));
+// normalizează textul ca să prindă și variații gen "c-u-v-a-n-t", "cuv4nt"
+function normalizeForFilter(text) {
+  return text
+    .toLowerCase()
+    .replace(/0/g, 'o').replace(/1/g, 'i').replace(/3/g, 'e')
+    .replace(/4/g, 'a').replace(/5/g, 's').replace(/7/g, 't')
+    .replace(/[\s\-_.*]+/g, '');
+}
+
+function containsHateSpeechLocal(text) {
+  const normalized = normalizeForFilter(text);
+  return HATE_SPEECH_PATTERNS.some((pattern) => pattern.test(text) || pattern.test(normalized));
+}
+
+// Verificare opțională cu Perspective API (Google/Jigsaw) — detectează
+// toxicitate/ură mult mai bine decât o listă fixă de cuvinte, dar are
+// nevoie de o cheie API gratuită. Fără cheie, se sare peste acest pas.
+async function checkPerspectiveApi(text) {
+  if (!PERSPECTIVE_API_KEY) return { flagged: false };
+  try {
+    const res = await fetch(
+      `https://commentanalyzer.googleapis.com/v1alpha1/comments:analyze?key=${PERSPECTIVE_API_KEY}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          comment: { text },
+          languages: ['ro', 'en'],
+          requestedAttributes: { IDENTITY_ATTACK: {}, SEVERE_TOXICITY: {} },
+        }),
+      }
+    );
+    if (!res.ok) return { flagged: false };
+    const data = await res.json();
+    const identityAttack = data.attributeScores?.IDENTITY_ATTACK?.summaryScore?.value || 0;
+    const severeToxicity = data.attributeScores?.SEVERE_TOXICITY?.summaryScore?.value || 0;
+    return { flagged: identityAttack > 0.75 || severeToxicity > 0.9 };
+  } catch (e) {
+    // dacă API-ul e jos sau dă eroare, nu blocăm mesajul din cauza asta
+    return { flagged: false };
+  }
+}
+
+async function isMessageBlocked(text) {
+  if (containsHateSpeechLocal(text)) return true;
+  const perspective = await checkPerspectiveApi(text);
+  return perspective.flagged;
 }
 
 /* ------------------------------------------------------------- */
@@ -36,6 +92,9 @@ let currentNick = localStorage.getItem('roastarena_nick') || '';
 let currentRoom = 'general';
 let roomsCache = { general: { name: '#general' } };
 let currentUid = null;
+let isAdmin = false;
+let pendingQuickNick = null;
+let lastSendAt = 0;
 
 const gate = document.getElementById('gate');
 const appEl = document.getElementById('app');
@@ -45,6 +104,7 @@ const nickTakenWarning = document.getElementById('nickTakenWarning');
 const whoNick = document.getElementById('whoNick');
 const changeNickBtn = document.getElementById('changeNick');
 const signOutBtn = document.getElementById('signOutBtn');
+const bannedNotice = document.getElementById('bannedNotice');
 
 const quickEntryBox = document.getElementById('quickEntryBox');
 const accountBox = document.getElementById('accountBox');
@@ -55,6 +115,7 @@ const emailInput = document.getElementById('emailInput');
 const passwordInput = document.getElementById('passwordInput');
 const emailAuthBtn = document.getElementById('emailAuthBtn');
 const googleBtn = document.getElementById('googleBtn');
+const forgotPasswordLink = document.getElementById('forgotPasswordLink');
 const authError = document.getElementById('authError');
 const claimNickInput = document.getElementById('claimNickInput');
 const claimNickBtn = document.getElementById('claimNickBtn');
@@ -82,22 +143,48 @@ const roomView = document.getElementById('roomView');
 const leaderboardView = document.getElementById('leaderboardView');
 const leaderboardContent = document.getElementById('leaderboardContent');
 
+const adminBtn = document.getElementById('adminBtn');
+const adminView = document.getElementById('adminView');
+const adminContent = document.getElementById('adminContent');
+const backToRoomFromAdminBtn = document.getElementById('backToRoomFromAdminBtn');
+
 function resetGateView() {
   quickEntryBox.classList.remove('hidden');
   accountBox.classList.remove('hidden');
   claimNicknameBox.classList.add('hidden');
+  bannedNotice.classList.add('hidden');
   authError.classList.add('hidden');
   claimError.classList.add('hidden');
   nickTakenWarning.classList.add('hidden');
 }
 
-function enterArena(nick, uid) {
+async function isBanned(uid) {
+  if (!uid) return false;
+  const snap = await get(ref(db, `banned/${uid}`));
+  return snap.exists();
+}
+
+function showBannedNotice() {
+  quickEntryBox.classList.add('hidden');
+  accountBox.classList.add('hidden');
+  claimNicknameBox.classList.add('hidden');
+  bannedNotice.classList.remove('hidden');
+}
+
+async function enterArena(nick, uid, isAccount) {
+  if (uid && await isBanned(uid)) {
+    showBannedNotice();
+    return;
+  }
   currentNick = nick.trim().slice(0, 24);
   if (!currentNick) return;
   currentUid = uid || null;
-  if (!uid) localStorage.setItem('roastarena_nick', currentNick);
-  whoNick.textContent = currentNick + (uid ? ' 🔒' : '');
-  signOutBtn.classList.toggle('hidden', !uid);
+  if (!isAccount) localStorage.setItem('roastarena_nick', currentNick);
+  const adminSnap = currentUid ? await get(ref(db, `admins/${currentUid}`)) : null;
+  isAdmin = !!(adminSnap && adminSnap.exists());
+  adminBtn.classList.toggle('hidden', !isAdmin);
+  whoNick.textContent = currentNick + (isAccount ? ' 🔒' : '');
+  signOutBtn.classList.toggle('hidden', !isAccount);
   gate.classList.add('hidden');
   appEl.classList.remove('hidden');
   listenRooms();
@@ -112,7 +199,15 @@ async function tryQuickEntry(nick) {
     nickTakenWarning.classList.remove('hidden');
     return;
   }
-  enterArena(nick, null);
+  nickTakenWarning.classList.add('hidden');
+  pendingQuickNick = nick;
+  try {
+    await signInAnonymously(auth);
+    // onAuthStateChanged preia de aici și intră în arenă
+  } catch (e) {
+    pendingQuickNick = null;
+    alert('Nu s-a putut porni sesiunea. Încearcă din nou.');
+  }
 }
 
 if (currentNick) {
@@ -121,7 +216,11 @@ if (currentNick) {
 enterBtn.addEventListener('click', () => tryQuickEntry(nickInput.value));
 nickInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') tryQuickEntry(nickInput.value); });
 
-changeNickBtn.addEventListener('click', () => {
+changeNickBtn.addEventListener('click', async () => {
+  if (!currentUid) {
+    // sesiune anonimă — o închidem ca să poată alege altă poreclă curat
+    try { await signOut(auth); } catch (e) {}
+  }
   appEl.classList.add('hidden');
   gate.classList.remove('hidden');
   resetGateView();
@@ -159,6 +258,7 @@ function friendlyAuthError(code) {
     'auth/wrong-password': 'email sau parolă greșite.',
     'auth/user-not-found': 'nu există cont cu acest email — încearcă "cont nou".',
     'auth/popup-closed-by-user': 'fereastra Google a fost închisă înainte de autentificare.',
+    'auth/missing-email': 'scrie mai întâi emailul, apoi apasă din nou.',
   };
   return map[code] || 'ceva n-a mers. încearcă din nou.';
 }
@@ -181,6 +281,25 @@ emailAuthBtn.addEventListener('click', async () => {
   }
 });
 
+forgotPasswordLink.addEventListener('click', async (e) => {
+  e.preventDefault();
+  const email = emailInput.value.trim();
+  authError.classList.add('hidden');
+  if (!email) {
+    authError.textContent = friendlyAuthError('auth/missing-email');
+    authError.classList.remove('hidden');
+    return;
+  }
+  try {
+    await sendPasswordResetEmail(auth, email);
+    authError.textContent = 'ți-am trimis un email de resetare a parolei.';
+    authError.classList.remove('hidden');
+  } catch (err) {
+    authError.textContent = friendlyAuthError(err.code);
+    authError.classList.remove('hidden');
+  }
+});
+
 googleBtn.addEventListener('click', async () => {
   authError.classList.add('hidden');
   try {
@@ -193,10 +312,25 @@ googleBtn.addEventListener('click', async () => {
 
 onAuthStateChanged(auth, async (user) => {
   if (!user) return;
+
+  if (user.isAnonymous) {
+    if (pendingQuickNick) {
+      const nick = pendingQuickNick;
+      pendingQuickNick = null;
+      await enterArena(nick, user.uid, false);
+    }
+    return;
+  }
+
+  // utilizator cu cont (email sau Google)
+  if (await isBanned(user.uid)) {
+    showBannedNotice();
+    return;
+  }
   const userSnap = await get(ref(db, `users/${user.uid}`));
   const userData = userSnap.val();
   if (userData && userData.nickname) {
-    enterArena(userData.nickname, user.uid);
+    enterArena(userData.nickname, user.uid, true);
   } else {
     quickEntryBox.classList.add('hidden');
     accountBox.classList.add('hidden');
@@ -217,7 +351,7 @@ claimNickBtn.addEventListener('click', async () => {
   }
   await set(ref(db, `nicknames/${key}`), auth.currentUser.uid);
   await set(ref(db, `users/${auth.currentUser.uid}`), { nickname: nick, email: auth.currentUser.email || null });
-  enterArena(nick, auth.currentUser.uid);
+  enterArena(nick, auth.currentUser.uid, true);
 });
 
 /* ---------------- ROOMS ---------------- */
@@ -304,7 +438,7 @@ function renderMessage(roomId, id, m) {
   const el = document.createElement('div');
   el.className = 'msg';
   const votes = m.votes || 0;
-  const voted = (m.voters || {})[currentNick];
+  const voted = (m.voters || {})[currentUid];
   const isTopBadge = m.isDailyTop ? '<span class="msg-badge">🔥 roast-ul zilei</span>' : '';
   el.innerHTML = `
     <div class="msg-head">
@@ -315,14 +449,30 @@ function renderMessage(roomId, id, m) {
     <div class="msg-text">${escapeHtml(m.text)}</div>
     <div class="msg-foot">
       <button class="vote-btn ${voted ? 'voted' : ''}" data-id="${id}">🔥 ${votes}</button>
+      <button class="report-btn" data-id="${id}" title="raportează">🚩</button>
     </div>
   `;
   el.querySelector('.vote-btn').addEventListener('click', () => toggleVote(roomId, id, !!voted));
+  el.querySelector('.report-btn').addEventListener('click', (e) => reportMessage(roomId, id, m, e.target));
   return el;
 }
 
+async function reportMessage(roomId, id, m, btnEl) {
+  if (!confirm('Raportezi acest mesaj moderatorilor?')) return;
+  await push(ref(db, `reports/${roomId}`), {
+    msgId: id,
+    nick: m.nick,
+    text: m.text,
+    reportedUid: m.uid || null,
+    reporterUid: currentUid,
+    ts: Date.now(),
+  });
+  btnEl.textContent = '✓';
+  btnEl.disabled = true;
+}
+
 async function toggleVote(roomId, id, alreadyVoted) {
-  const votersRef = ref(db, `messages/${roomId}/${id}/voters/${currentNick}`);
+  const votersRef = ref(db, `messages/${roomId}/${id}/voters/${currentUid}`);
   const msgRef = ref(db, `messages/${roomId}/${id}`);
   const snap = await get(msgRef);
   const m = snap.val();
@@ -342,7 +492,7 @@ function renderDuel(roomId, id, d) {
   el.className = 'duel';
   const cVotes = d.challengerVotes || 0;
   const oVotes = d.opponentVotes || 0;
-  const myVote = (d.voters || {})[currentNick];
+  const myVote = (d.voters || {})[currentUid];
   const hasOpponentReply = !!d.opponentText;
 
   el.innerHTML = `
@@ -382,8 +532,13 @@ function renderDuel(roomId, id, d) {
     btn.addEventListener('click', async () => {
       const text = input.value.trim();
       if (!text) return;
-      if (containsHateSpeech(text)) { alert('Replica ta conține limbaj interzis (ură reală, nu roast).'); return; }
-      await update(ref(db, `duels/${roomId}/${id}`), { opponentText: text });
+      btn.disabled = true;
+      if (await isMessageBlocked(text)) {
+        alert('Replica ta conține limbaj interzis (ură reală, nu roast).');
+        btn.disabled = false;
+        return;
+      }
+      await update(ref(db, `duels/${roomId}/${id}`), { opponentText: text, opponentUid: currentUid });
     });
     replyBox.appendChild(input);
     replyBox.appendChild(btn);
@@ -411,7 +566,7 @@ async function voteDuel(roomId, id, side, myVote) {
     updates[myVote === 'challenger' ? 'challengerVotes' : 'opponentVotes'] = Math.max(0, (d[myVote === 'challenger' ? 'challengerVotes' : 'opponentVotes'] || 0) - 1);
   }
   updates[side === 'challenger' ? 'challengerVotes' : 'opponentVotes'] = (d[side === 'challenger' ? 'challengerVotes' : 'opponentVotes'] || 0) + 1;
-  updates[`voters/${currentNick}`] = side;
+  updates[`voters/${currentUid}`] = side;
   await update(duelRef, updates);
 }
 
@@ -423,14 +578,27 @@ msgInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') sendMessage
 async function sendMessage() {
   const text = msgInput.value.trim();
   if (!text) return;
-  if (containsHateSpeech(text)) {
+
+  const now = Date.now();
+  if (now - lastSendAt < SEND_COOLDOWN_MS) {
+    filterWarning.textContent = `încet, campionule — mai așteaptă ${Math.ceil((SEND_COOLDOWN_MS - (now - lastSendAt)) / 1000)}s.`;
     filterWarning.classList.remove('hidden');
     return;
   }
+
+  sendBtn.disabled = true;
+  if (await isMessageBlocked(text)) {
+    filterWarning.textContent = 'mesajul a fost blocat — conține limbaj interzis (atac pe bază de rasă/etnie/orientare/dizabilitate), nu genul de injurătură creativă cu care ne mândrim aici.';
+    filterWarning.classList.remove('hidden');
+    sendBtn.disabled = false;
+    return;
+  }
   filterWarning.classList.add('hidden');
+  lastSendAt = now;
   const msgsRef = ref(db, `messages/${currentRoom}`);
-  await push(msgsRef, { nick: currentNick, text, votes: 0, ts: Date.now() });
+  await push(msgsRef, { nick: currentNick, uid: currentUid, text, votes: 0, ts: Date.now() });
   msgInput.value = '';
+  sendBtn.disabled = false;
 }
 
 /* ---------------- DUELS ---------------- */
@@ -442,10 +610,21 @@ duelSendBtn.addEventListener('click', async () => {
   const opponent = duelOpponent.value.trim();
   const opening = duelOpening.value.trim();
   if (!opponent || !opening) return;
-  if (containsHateSpeech(opening)) { alert('Replica ta conține limbaj interzis (ură reală, nu roast).'); return; }
+
+  const now = Date.now();
+  if (now - lastSendAt < SEND_COOLDOWN_MS) return;
+
+  duelSendBtn.disabled = true;
+  if (await isMessageBlocked(opening)) {
+    alert('Replica ta conține limbaj interzis (ură reală, nu roast).');
+    duelSendBtn.disabled = false;
+    return;
+  }
+  lastSendAt = now;
   const duelsRef = ref(db, `duels/${currentRoom}`);
   await push(duelsRef, {
     challenger: currentNick,
+    challengerUid: currentUid,
     opponent,
     challengerText: opening,
     opponentText: '',
@@ -456,6 +635,7 @@ duelSendBtn.addEventListener('click', async () => {
   duelOpponent.value = '';
   duelOpening.value = '';
   duelModal.classList.add('hidden');
+  duelSendBtn.disabled = false;
 });
 
 /* ---------------- LEADERBOARD ---------------- */
@@ -474,10 +654,12 @@ async function renderLeaderboard() {
   leaderboardContent.innerHTML = '<p style="color:var(--text-faint)">se calculează...</p>';
   const allMessagesSnap = await get(ref(db, 'messages'));
   const allMessages = allMessagesSnap.val() || {};
+  const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
 
   const scores = {};
   Object.values(allMessages).forEach((roomMsgs) => {
     Object.values(roomMsgs).forEach((m) => {
+      if ((m.ts || 0) < weekAgo) return;
       scores[m.nick] = (scores[m.nick] || 0) + (m.votes || 0);
     });
   });
@@ -485,11 +667,11 @@ async function renderLeaderboard() {
   const ranked = Object.entries(scores).sort((a, b) => b[1] - a[1]).slice(0, 20);
 
   if (ranked.length === 0) {
-    leaderboardContent.innerHTML = '<p style="color:var(--text-faint)">niciun roast votat încă. fii primul.</p>';
+    leaderboardContent.innerHTML = '<p style="color:var(--text-faint)">niciun roast votat săptămâna asta. fii primul.</p>';
     return;
   }
 
-  leaderboardContent.innerHTML = '';
+  leaderboardContent.innerHTML = '<p style="color:var(--text-faint); font-size:12px; margin-bottom:12px;">scor din ultimele 7 zile</p>';
   ranked.forEach(([nick, score], i) => {
     const tier = score >= 50 ? 'gold' : score >= 20 ? 'silver' : score >= 5 ? 'bronze' : null;
     const tierLabel = tier === 'gold' ? '🥇 legendă' : tier === 'silver' ? '🥈 veteran' : tier === 'bronze' ? '🥉 promițător' : '';
@@ -498,10 +680,78 @@ async function renderLeaderboard() {
     card.innerHTML = `
       <span class="lb-rank">#${i + 1}</span>
       <span class="lb-nick">${escapeHtml(nick)}</span>
-      <span class="lb-score">${score} 🔥 total</span>
+      <span class="lb-score">${score} 🔥 săpt.</span>
       ${tier ? `<span class="lb-tier ${tier}">${tierLabel}</span>` : ''}
     `;
     leaderboardContent.appendChild(card);
+  });
+}
+
+/* ---------------- ADMIN ---------------- */
+
+adminBtn.addEventListener('click', async () => {
+  roomView.classList.add('hidden');
+  leaderboardView.classList.add('hidden');
+  adminView.classList.remove('hidden');
+  await renderAdmin();
+});
+backToRoomFromAdminBtn.addEventListener('click', () => {
+  adminView.classList.add('hidden');
+  roomView.classList.remove('hidden');
+});
+
+async function renderAdmin() {
+  adminContent.innerHTML = '<p style="color:var(--text-faint)">se încarcă rapoartele...</p>';
+  const reportsSnap = await get(ref(db, 'reports'));
+  const allReports = reportsSnap.val() || {};
+
+  const flatReports = [];
+  Object.entries(allReports).forEach(([roomId, roomReports]) => {
+    Object.entries(roomReports).forEach(([reportId, r]) => {
+      flatReports.push({ roomId, reportId, ...r });
+    });
+  });
+  flatReports.sort((a, b) => (b.ts || 0) - (a.ts || 0));
+
+  if (flatReports.length === 0) {
+    adminContent.innerHTML = '<p style="color:var(--text-faint)">niciun raport activ. liniște.</p>';
+    return;
+  }
+
+  adminContent.innerHTML = '';
+  flatReports.forEach((r) => {
+    const card = document.createElement('div');
+    card.className = 'lb-card';
+    card.style.flexDirection = 'column';
+    card.style.alignItems = 'flex-start';
+    card.style.gap = '8px';
+    card.innerHTML = `
+      <div><span class="lb-nick">${escapeHtml(r.nick)}</span> <span class="msg-time">în #${escapeHtml(r.roomId)}</span></div>
+      <div class="msg-text">${escapeHtml(r.text)}</div>
+      <div style="display:flex; gap:8px;">
+        <button class="btn-ghost dismiss-btn">ignoră</button>
+        <button class="btn-ghost delete-btn">șterge mesajul</button>
+        <button class="btn-ghost ban-btn" style="border-color:var(--danger); color:var(--danger);" ${r.reportedUid ? '' : 'disabled title="nu am uid-ul autorului"'}>blochează autorul</button>
+      </div>
+    `;
+    card.querySelector('.dismiss-btn').addEventListener('click', async () => {
+      await remove(ref(db, `reports/${r.roomId}/${r.reportId}`));
+      renderAdmin();
+    });
+    card.querySelector('.delete-btn').addEventListener('click', async () => {
+      await remove(ref(db, `messages/${r.roomId}/${r.msgId}`));
+      await remove(ref(db, `reports/${r.roomId}/${r.reportId}`));
+      renderAdmin();
+    });
+    card.querySelector('.ban-btn').addEventListener('click', async () => {
+      if (!r.reportedUid) return;
+      if (!confirm(`Blochezi definitiv utilizatorul "${r.nick}"?`)) return;
+      await set(ref(db, `banned/${r.reportedUid}`), { reason: 'raport admin', ts: Date.now() });
+      await remove(ref(db, `messages/${r.roomId}/${r.msgId}`));
+      await remove(ref(db, `reports/${r.roomId}/${r.reportId}`));
+      renderAdmin();
+    });
+    adminContent.appendChild(card);
   });
 }
 

@@ -254,6 +254,15 @@ input{ font-family: var(--font-mono); }
 }
 .vote-btn:hover{ border-color: var(--flame-1); color: var(--ember); }
 .vote-btn.voted{ border-color: var(--flame-1); color: var(--ember); background: #2a190f; }
+.report-btn{
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--text-faint);
+  border-radius: 14px;
+  padding: 4px 8px;
+  font-size: 12px;
+}
+.report-btn:hover{ border-color: var(--danger); color: var(--danger); }
 
 /* DUEL CARD */
 .duel{

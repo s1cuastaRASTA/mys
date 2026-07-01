@@ -34,6 +34,7 @@
       <input id="passwordInput" type="password" placeholder="parolă (min. 6 caractere)" autocomplete="current-password">
       <button id="emailAuthBtn" class="btn-flame">autentificare</button>
       <button id="googleBtn" class="btn-ghost full">continuă cu Google</button>
+      <p style="text-align:right; margin: 0 0 10px;"><a id="forgotPasswordLink" href="#" style="color:var(--text-faint); font-size:11px;">am uitat parola</a></p>
       <p id="authError" class="filter-warning hidden"></p>
     </div>
 
@@ -42,6 +43,10 @@
       <input id="claimNickInput" type="text" placeholder="poreclă (ex: NebunuDinBlocB4)" maxlength="24" autocomplete="off">
       <button id="claimNickBtn" class="btn-flame">revendică porecla și intră</button>
       <p id="claimError" class="filter-warning hidden"></p>
+    </div>
+
+    <div id="bannedNotice" class="hidden">
+      <p class="filter-warning" style="font-size:13px;">contul/sesiunea ta a fost blocată de un moderator pentru încălcarea regulilor. dacă crezi că e o greșeală, contactează administratorul platformei.</p>
     </div>
 
     <p class="gate-rules">reguli: fără atacuri pe bază de rasă, etnie, orientare sau dizabilitate. restul e liber. <span id="rulesMore">detalii</span></p>
@@ -72,6 +77,7 @@
       </div>
       <div class="sidebar-section">
         <button id="leaderboardBtn" class="btn-ghost full">🏆 clasament & badge-uri</button>
+        <button id="adminBtn" class="btn-ghost full hidden" style="margin-top:8px; border-color:var(--danger); color:var(--danger);">🛡️ panou admin</button>
       </div>
     </aside>
 
@@ -98,6 +104,14 @@
           <button id="backToRoomBtn" class="btn-ghost">înapoi în cameră</button>
         </div>
         <div id="leaderboardContent"></div>
+      </div>
+
+      <div id="adminView" class="hidden">
+        <div class="room-header">
+          <h2>🛡️ panou admin — rapoarte</h2>
+          <button id="backToRoomFromAdminBtn" class="btn-ghost">înapoi în cameră</button>
+        </div>
+        <div id="adminContent"></div>
       </div>
 
     </main>
