@@ -14,6 +14,7 @@ import {
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 const auth = getAuth(app);
+const googleProvider = new GoogleAuthProvider();
 
 /* -------------------------------------------------------------
    CONFIG DE MODERARE
@@ -186,8 +187,6 @@ function showBannedNotice() {
 }
 
 let currentProfile = { nickname: '', email: 'anonim', score: 0, badges: [] };
-let presenceListenerUnsubscribe = null;
-let currentPresenceRef = null;
 let duelNotificationUnsubscribe = null;
 let notifiedDuelIds = new Set();
 
@@ -225,7 +224,6 @@ function renderUserProfile() {
 
 let presenceListenerUnsubscribe = null;
 let currentPresenceRef = null;
-let notifiedDuelIds = new Set();
 
 async function leavePresence() {
   if (!currentPresenceRef) return;
@@ -436,7 +434,7 @@ tabSignup.addEventListener('click', () => {
   emailAuthBtn.textContent = 'creează cont';
 });
 
-function friendlyAuthError(code) {
+function friendlyAuthError(codeOrMessage) {
   const map = {
     'auth/invalid-email': 'email invalid.',
     'auth/email-already-in-use': 'există deja un cont cu acest email — încearcă autentificare.',
@@ -446,13 +444,22 @@ function friendlyAuthError(code) {
     'auth/user-not-found': 'nu există cont cu acest email — încearcă "cont nou".',
     'auth/popup-closed-by-user': 'fereastra Google a fost închisă înainte de autentificare.',
     'auth/popup-blocked': 'popup-ul Google a fost blocat de browser. încearcă din nou sau folosește redirect.',
+    'auth/operation-not-supported-in-this-environment': 'browserul tău nu suportă autentificarea prin popup. încearcă din nou sau folosește redirect.',
+    'auth/redirect-cancelled-by-user': 'autentificarea Google a fost anulată. încearcă din nou.',
     'auth/cancelled-popup-request': 'cererea Google a fost anulată. încearcă din nou.',
     'auth/operation-not-allowed': 'autentificarea nu este activată în Firebase. activează Email/Password și/sau Google în consola Firebase.',
-    'auth/unauthorized-domain': 'domeniul tău nu este autorizat în Firebase Auth. adaugă domeniul în consola Firebase.',
+    'auth/unauthorized-domain': `domeniul ${window.location.host} nu este autorizat în Firebase Auth. adaugă domeniul în consola Firebase.`,
     'auth/network-request-failed': 'eroare de rețea. verifică conexiunea la internet.',
     'auth/web-storage-unsupported': 'browserul tău nu suportă stocare necesară Firebase Auth.',
     'auth/missing-email': 'scrie mai întâi emailul, apoi apasă din nou.',
   };
+
+  let code = codeOrMessage;
+  if (typeof codeOrMessage === 'string') {
+    const match = codeOrMessage.match(/auth\/[a-zA-Z-]+/);
+    if (match) code = match[0];
+  }
+
   return map[code] || `ceva n-a mers. cod eroare: ${code || 'unknown'}`;
 }
 
@@ -508,12 +515,21 @@ googleBtn.addEventListener('click', async () => {
   authError.classList.add('hidden');
   try {
     await setPersistence(auth, browserLocalPersistence);
-    await signInWithPopup(auth, new GoogleAuthProvider());
+    await signInWithPopup(auth, googleProvider);
   } catch (err) {
-    if (err.code === 'auth/popup-blocked' || err.code === 'auth/popup-closed-by-user') {
+    console.warn('Google auth failed, falling back if possible:', err);
+    const fallbackCodes = new Set([
+      'auth/popup-blocked',
+      'auth/popup-closed-by-user',
+      'auth/cancelled-popup-request',
+      'auth/operation-not-supported-in-this-environment',
+    ]);
+
+    if (fallbackCodes.has(err.code)) {
       try {
-        await signInWithRedirect(auth, new GoogleAuthProvider());
+        await signInWithRedirect(auth, googleProvider);
       } catch (redirectErr) {
+        console.error('Google redirect auth failed:', redirectErr);
         authError.textContent = friendlyAuthError(redirectErr.code || redirectErr.message);
         authError.classList.remove('hidden');
       }
