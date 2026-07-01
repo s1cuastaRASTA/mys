@@ -383,7 +383,6 @@ async function tryQuickEntry(nick) {
   }
 }
 
-const isLocalFileOpen = window.location.protocol === 'file:';
 if (currentNick) {
   nickInput.value = currentNick;
 }
