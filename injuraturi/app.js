@@ -120,6 +120,7 @@ const authError = document.getElementById('authError');
 const claimNickInput = document.getElementById('claimNickInput');
 const claimNickBtn = document.getElementById('claimNickBtn');
 const claimError = document.getElementById('claimError');
+const isLocalFileOpen = window.location.protocol === 'file:';
 
 const roomList = document.getElementById('roomList');
 const presenceList = document.getElementById('presenceList');
@@ -360,6 +361,11 @@ async function enterArena(nick, uid, isAccount) {
 }
 
 async function tryQuickEntry(nick) {
+  if (isLocalFileOpen) {
+    authError.textContent = 'Nu poți folosi autentificarea locală din fișierele file://. Rulează proiectul pe un server local sau public.';
+    authError.classList.remove('hidden');
+    return;
+  }
   nick = nick.trim().slice(0, 24);
   if (!nick) return;
   const claimSnap = await get(ref(db, `nicknames/${nick.toLowerCase()}`));
@@ -374,7 +380,8 @@ async function tryQuickEntry(nick) {
     // onAuthStateChanged preia de aici și intră în arenă
   } catch (e) {
     pendingQuickNick = null;
-    alert('Nu s-a putut porni sesiunea. Încearcă din nou.');
+    authError.textContent = friendlyAuthError(e.code || e.message || 'unknown');
+    authError.classList.remove('hidden');
   }
 }
 
@@ -438,12 +445,23 @@ function friendlyAuthError(code) {
     'auth/wrong-password': 'email sau parolă greșite.',
     'auth/user-not-found': 'nu există cont cu acest email — încearcă "cont nou".',
     'auth/popup-closed-by-user': 'fereastra Google a fost închisă înainte de autentificare.',
+    'auth/popup-blocked': 'popup-ul Google a fost blocat de browser. încearcă din nou sau folosește redirect.',
+    'auth/cancelled-popup-request': 'cererea Google a fost anulată. încearcă din nou.',
+    'auth/operation-not-allowed': 'autentificarea nu este activată în Firebase. activează Email/Password și/sau Google în consola Firebase.',
+    'auth/unauthorized-domain': 'domeniul tău nu este autorizat în Firebase Auth. adaugă domeniul în consola Firebase.',
+    'auth/network-request-failed': 'eroare de rețea. verifică conexiunea la internet.',
+    'auth/web-storage-unsupported': 'browserul tău nu suportă stocare necesară Firebase Auth.',
     'auth/missing-email': 'scrie mai întâi emailul, apoi apasă din nou.',
   };
-  return map[code] || 'ceva n-a mers. încearcă din nou.';
+  return map[code] || `ceva n-a mers. cod eroare: ${code || 'unknown'}`;
 }
 
 emailAuthBtn.addEventListener('click', async () => {
+  if (isLocalFileOpen) {
+    authError.textContent = 'Nu poți folosi autentificarea locală din fișierele file://. Rulează proiectul pe un server local sau public.';
+    authError.classList.remove('hidden');
+    return;
+  }
   const email = emailInput.value.trim();
   const password = passwordInput.value;
   authError.classList.add('hidden');
@@ -482,6 +500,11 @@ forgotPasswordLink.addEventListener('click', async (e) => {
 });
 
 googleBtn.addEventListener('click', async () => {
+  if (isLocalFileOpen) {
+    authError.textContent = 'Nu poți folosi autentificarea locală din fișierele file://. Rulează proiectul pe un server local sau public.';
+    authError.classList.remove('hidden');
+    return;
+  }
   authError.classList.add('hidden');
   try {
     await setPersistence(auth, browserLocalPersistence);
