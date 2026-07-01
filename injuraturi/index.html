@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>#injuraturi — arena de roast</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="gate" class="gate">
+  <div class="gate-box">
+    <p class="gate-eyebrow">// bine ai venit pe</p>
+    <h1 class="logo">#injuraturi</h1>
+    <p class="gate-sub">arena liberă de roast. alegi o poreclă, intri, dai cu mișto. comunitatea votează.</p>
+    <input id="nickInput" type="text" placeholder="poreclă (ex: NebunuDinBlocB4)" maxlength="24" autocomplete="off">
+    <button id="enterBtn" class="btn-flame">intră în arenă</button>
+    <p class="gate-rules">reguli: fără atacuri pe bază de rasă, etnie, orientare sau dizabilitate. restul e liber. <span id="rulesMore">detalii</span></p>
+  </div>
+</div>
+
+<div id="app" class="app hidden">
+
+  <header class="topbar">
+    <span class="logo-small">#injuraturi</span>
+    <div class="who">
+      <span id="whoNick" class="who-nick"></span>
+      <button id="changeNick" class="btn-ghost">schimbă porecla</button>
+    </div>
+  </header>
+
+  <div class="layout">
+
+    <aside class="sidebar">
+      <div class="sidebar-section">
+        <p class="sidebar-title">camere</p>
+        <div id="roomList" class="room-list"></div>
+        <div class="new-room">
+          <input id="newRoomName" type="text" placeholder="#numecameraNoua" maxlength="28">
+          <button id="createRoomBtn" class="btn-ghost">+ creează</button>
+        </div>
+      </div>
+      <div class="sidebar-section">
+        <button id="leaderboardBtn" class="btn-ghost full">🏆 clasament & badge-uri</button>
+      </div>
+    </aside>
+
+    <main class="main">
+
+      <div id="roomView">
+        <div class="room-header">
+          <h2 id="roomTitle">#general</h2>
+          <button id="duelBtn" class="btn-flame small">⚔️ provoacă la duel</button>
+        </div>
+
+        <div id="feed" class="feed"></div>
+
+        <div class="composer">
+          <input id="msgInput" type="text" placeholder="scrie o injurătură cu stil..." maxlength="280">
+          <button id="sendBtn" class="btn-flame">trimite</button>
+        </div>
+        <p id="filterWarning" class="filter-warning hidden">mesajul a fost blocat — conține limbaj interzis (atac pe bază de rasă/etnie/orientare/dizabilitate), nu genul de injurătură creativă cu care ne mândrim aici.</p>
+      </div>
+
+      <div id="leaderboardView" class="hidden">
+        <div class="room-header">
+          <h2>🏆 clasament & badge-uri</h2>
+          <button id="backToRoomBtn" class="btn-ghost">înapoi în cameră</button>
+        </div>
+        <div id="leaderboardContent"></div>
+      </div>
+
+    </main>
+  </div>
+</div>
+
+<div id="duelModal" class="modal hidden">
+  <div class="modal-box">
+    <h3>⚔️ provoacă pe cineva la duel</h3>
+    <p class="modal-sub">scrie porecla adversarului. el/ea va trebui să răspundă cu o replică, apoi comunitatea votează cine a câștigat.</p>
+    <input id="duelOpponent" type="text" placeholder="porecla adversarului" maxlength="24">
+    <input id="duelOpening" type="text" placeholder="replica ta de deschidere" maxlength="280">
+    <div class="modal-actions">
+      <button id="duelCancelBtn" class="btn-ghost">anulează</button>
+      <button id="duelSendBtn" class="btn-flame">lansează duelul</button>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>
