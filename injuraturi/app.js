@@ -175,6 +175,17 @@ function showConfirm(message, title = 'confirmă') {
   });
 }
 
+// helper defensiv: dacă elementul nu există în HTML (versiuni desincronizate
+// între index.html și app.js), nu mai crapă tot scriptul — doar ignoră
+// acel buton specific și restul aplicației continuă să funcționeze.
+function on(el, event, handler) {
+  if (!el) {
+    console.warn(`[roast-arena] element lipsă din HTML pentru evenimentul "${event}" — index.html și app.js par desincronizate.`);
+    return;
+  }
+  el.addEventListener(event, handler);
+}
+
 function resetGateView() {
   quickEntryBox.classList.remove('hidden');
   accountBox.classList.remove('hidden');
@@ -241,10 +252,10 @@ async function tryQuickEntry(nick) {
 if (currentNick) {
   nickInput.value = currentNick;
 }
-enterBtn.addEventListener('click', () => tryQuickEntry(nickInput.value));
-nickInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') tryQuickEntry(nickInput.value); });
+on(enterBtn, 'click', () => tryQuickEntry(nickInput.value));
+on(nickInput, 'keydown', (e) => { if (e.key === 'Enter') tryQuickEntry(nickInput.value); });
 
-changeNickBtn.addEventListener('click', async () => {
+on(changeNickBtn, 'click', async () => {
   if (!currentUid) {
     // sesiune anonimă — o închidem ca să poată alege altă poreclă curat
     try { await signOut(auth); } catch (e) {}
@@ -254,7 +265,7 @@ changeNickBtn.addEventListener('click', async () => {
   resetGateView();
 });
 
-signOutBtn.addEventListener('click', async () => {
+on(signOutBtn, 'click', async () => {
   await signOut(auth);
   appEl.classList.add('hidden');
   gate.classList.remove('hidden');
@@ -264,13 +275,13 @@ signOutBtn.addEventListener('click', async () => {
 /* ---------------- ACCOUNT: EMAIL/PASSWORD + GOOGLE ---------------- */
 
 let authMode = 'login';
-tabLogin.addEventListener('click', () => {
+on(tabLogin, 'click', () => {
   authMode = 'login';
   tabLogin.classList.add('active');
   tabSignup.classList.remove('active');
   emailAuthBtn.textContent = 'autentificare';
 });
-tabSignup.addEventListener('click', () => {
+on(tabSignup, 'click', () => {
   authMode = 'signup';
   tabSignup.classList.add('active');
   tabLogin.classList.remove('active');
@@ -291,7 +302,7 @@ function friendlyAuthError(code) {
   return map[code] || 'ceva n-a mers. încearcă din nou.';
 }
 
-emailAuthBtn.addEventListener('click', async () => {
+on(emailAuthBtn, 'click', async () => {
   const email = emailInput.value.trim();
   const password = passwordInput.value;
   authError.classList.add('hidden');
@@ -309,7 +320,7 @@ emailAuthBtn.addEventListener('click', async () => {
   }
 });
 
-forgotPasswordLink.addEventListener('click', async (e) => {
+on(forgotPasswordLink, 'click', async (e) => {
   e.preventDefault();
   const email = emailInput.value.trim();
   authError.classList.add('hidden');
@@ -328,7 +339,7 @@ forgotPasswordLink.addEventListener('click', async (e) => {
   }
 });
 
-googleBtn.addEventListener('click', async () => {
+on(googleBtn, 'click', async () => {
   authError.classList.add('hidden');
   try {
     await signInWithPopup(auth, new GoogleAuthProvider());
@@ -364,7 +375,7 @@ onAuthStateChanged(auth, async (user) => {
   }
 });
 
-claimNickBtn.addEventListener('click', async () => {
+on(claimNickBtn, 'click', async () => {
   const nick = claimNickInput.value.trim().slice(0, 24);
   claimError.classList.add('hidden');
   if (!nick || !auth.currentUser) return;
@@ -402,7 +413,7 @@ function renderRoomList() {
   });
 }
 
-createRoomBtn.addEventListener('click', async () => {
+on(createRoomBtn, 'click', async () => {
   let name = newRoomName.value.trim();
   if (!name) return;
   if (!name.startsWith('#')) name = '#' + name;
@@ -599,8 +610,8 @@ async function voteDuel(roomId, id, side, myVote) {
 
 /* ---------------- SEND MESSAGE ---------------- */
 
-sendBtn.addEventListener('click', sendMessage);
-msgInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') sendMessage(); });
+on(sendBtn, 'click', sendMessage);
+on(msgInput, 'keydown', (e) => { if (e.key === 'Enter') sendMessage(); });
 
 async function sendMessage() {
   const text = msgInput.value.trim();
@@ -630,10 +641,10 @@ async function sendMessage() {
 
 /* ---------------- DUELS ---------------- */
 
-duelBtn.addEventListener('click', () => duelModal.classList.remove('hidden'));
-duelCancelBtn.addEventListener('click', () => duelModal.classList.add('hidden'));
+on(duelBtn, 'click', () => duelModal.classList.remove('hidden'));
+on(duelCancelBtn, 'click', () => duelModal.classList.add('hidden'));
 
-duelSendBtn.addEventListener('click', async () => {
+on(duelSendBtn, 'click', async () => {
   const opponent = duelOpponent.value.trim();
   const opening = duelOpening.value.trim();
   if (!opponent || !opening) return;
@@ -667,12 +678,12 @@ duelSendBtn.addEventListener('click', async () => {
 
 /* ---------------- LEADERBOARD ---------------- */
 
-leaderboardBtn.addEventListener('click', async () => {
+on(leaderboardBtn, 'click', async () => {
   roomView.classList.add('hidden');
   leaderboardView.classList.remove('hidden');
   await renderLeaderboard();
 });
-backToRoomBtn.addEventListener('click', () => {
+on(backToRoomBtn, 'click', () => {
   leaderboardView.classList.add('hidden');
   roomView.classList.remove('hidden');
 });
@@ -716,13 +727,13 @@ async function renderLeaderboard() {
 
 /* ---------------- ADMIN ---------------- */
 
-adminBtn.addEventListener('click', async () => {
+on(adminBtn, 'click', async () => {
   roomView.classList.add('hidden');
   leaderboardView.classList.add('hidden');
   adminView.classList.remove('hidden');
   await renderAdmin();
 });
-backToRoomFromAdminBtn.addEventListener('click', () => {
+on(backToRoomFromAdminBtn, 'click', () => {
   adminView.classList.add('hidden');
   roomView.classList.remove('hidden');
 });
