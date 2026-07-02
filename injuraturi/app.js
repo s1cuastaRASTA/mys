@@ -37,6 +37,14 @@ const HATE_SPEECH_PATTERNS = [
   // exemplu: /cuvant-interzis/i,
 ];
 
+// cuvinte blocate adăugate de admin din panoul de administrare (live,
+// din baza de date) — se adaugă la lista fixă de mai sus, nu o înlocuiesc.
+let dynamicBlockedWords = [];
+onValue(ref(db, 'moderation/blockedWords'), (snap) => {
+  const val = snap.val() || {};
+  dynamicBlockedWords = Object.entries(val).map(([id, word]) => ({ id, word }));
+});
+
 // normalizează textul ca să prindă și variații gen "c-u-v-a-n-t", "cuv4nt"
 function normalizeForFilter(text) {
   return text
@@ -48,7 +56,12 @@ function normalizeForFilter(text) {
 
 function containsHateSpeechLocal(text) {
   const normalized = normalizeForFilter(text);
-  return HATE_SPEECH_PATTERNS.some((pattern) => pattern.test(text) || pattern.test(normalized));
+  const patternHit = HATE_SPEECH_PATTERNS.some((pattern) => pattern.test(text) || pattern.test(normalized));
+  if (patternHit) return true;
+  return dynamicBlockedWords.some(({ word }) => {
+    const w = normalizeForFilter(word || '');
+    return w.length > 0 && normalized.includes(w);
+  });
 }
 
 // Verificare opțională cu Perspective API (Google/Jigsaw) — detectează
@@ -146,6 +159,10 @@ const adminBtn = document.getElementById('adminBtn');
 const adminView = document.getElementById('adminView');
 const adminContent = document.getElementById('adminContent');
 const backToRoomFromAdminBtn = document.getElementById('backToRoomFromAdminBtn');
+const adminTabReports = document.getElementById('adminTabReports');
+const adminTabBanned = document.getElementById('adminTabBanned');
+const adminTabWords = document.getElementById('adminTabWords');
+const adminTabRooms = document.getElementById('adminTabRooms');
 
 /* ---------------- CONFIRM MODAL (înlocuiește confirm() nativ) ---------------- */
 
@@ -727,6 +744,8 @@ async function renderLeaderboard() {
 
 /* ---------------- ADMIN ---------------- */
 
+let adminTab = 'reports';
+
 on(adminBtn, 'click', async () => {
   roomView.classList.add('hidden');
   leaderboardView.classList.add('hidden');
@@ -738,7 +757,27 @@ on(backToRoomFromAdminBtn, 'click', () => {
   roomView.classList.remove('hidden');
 });
 
+function setAdminTab(tab) {
+  adminTab = tab;
+  [adminTabReports, adminTabBanned, adminTabWords, adminTabRooms].forEach((btn) => btn && btn.classList.remove('active'));
+  const map = { reports: adminTabReports, banned: adminTabBanned, words: adminTabWords, rooms: adminTabRooms };
+  if (map[tab]) map[tab].classList.add('active');
+  renderAdmin();
+}
+on(adminTabReports, 'click', () => setAdminTab('reports'));
+on(adminTabBanned, 'click', () => setAdminTab('banned'));
+on(adminTabWords, 'click', () => setAdminTab('words'));
+on(adminTabRooms, 'click', () => setAdminTab('rooms'));
+
 async function renderAdmin() {
+  if (adminTab === 'reports') return renderAdminReports();
+  if (adminTab === 'banned') return renderAdminBanned();
+  if (adminTab === 'words') return renderAdminWords();
+  if (adminTab === 'rooms') return renderAdminRooms();
+}
+
+/* --- tab: rapoarte --- */
+async function renderAdminReports() {
   adminContent.innerHTML = '<p style="color:var(--text-faint)">se încarcă rapoartele...</p>';
   const reportsSnap = await get(ref(db, 'reports'));
   const allReports = reportsSnap.val() || {};
@@ -785,11 +824,115 @@ async function renderAdmin() {
       if (!r.reportedUid) return;
       const ok = await showConfirm(`Blochezi definitiv utilizatorul "${r.nick}"?`, 'blochează utilizator');
       if (!ok) return;
-      await set(ref(db, `banned/${r.reportedUid}`), { reason: 'raport admin', ts: Date.now() });
+      await set(ref(db, `banned/${r.reportedUid}`), { reason: 'raport admin', nick: r.nick, ts: Date.now() });
       await remove(ref(db, `messages/${r.roomId}/${r.msgId}`));
       await remove(ref(db, `reports/${r.roomId}/${r.reportId}`));
       renderAdmin();
     });
+    adminContent.appendChild(card);
+  });
+}
+
+/* --- tab: utilizatori blocați --- */
+async function renderAdminBanned() {
+  adminContent.innerHTML = '<p style="color:var(--text-faint)">se încarcă...</p>';
+  const bannedSnap = await get(ref(db, 'banned'));
+  const banned = bannedSnap.val() || {};
+  const entries = Object.entries(banned);
+
+  if (entries.length === 0) {
+    adminContent.innerHTML = '<p style="color:var(--text-faint)">niciun utilizator blocat momentan.</p>';
+    return;
+  }
+
+  adminContent.innerHTML = '';
+  entries.forEach(([uid, info]) => {
+    const card = document.createElement('div');
+    card.className = 'lb-card';
+    card.innerHTML = `
+      <span class="lb-nick">${escapeHtml(info.nick || '(poreclă necunoscută)')}</span>
+      <span class="lb-score" style="flex:1;">${info.reason || ''} · ${timeAgo(info.ts)}</span>
+      <button class="btn-ghost unban-btn">deblochează</button>
+    `;
+    card.querySelector('.unban-btn').addEventListener('click', async () => {
+      await remove(ref(db, `banned/${uid}`));
+      renderAdmin();
+    });
+    adminContent.appendChild(card);
+  });
+}
+
+/* --- tab: cuvinte blocate --- */
+async function renderAdminWords() {
+  adminContent.innerHTML = `
+    <p class="modal-sub" style="margin-bottom:14px;">
+      cuvinte/expresii care blochează automat un mesaj dacă apar în el
+      (nu sensibile la majuscule, spații sau cifre gen "4" în loc de "a").
+      folosește doar pentru limbaj de ură reală — nu pentru injurături obișnuite.
+    </p>
+    <div style="display:flex; gap:8px; margin-bottom:16px; max-width:420px;">
+      <input id="newBlockedWord" type="text" placeholder="cuvânt sau expresie" style="flex:1; padding:10px 12px; border-radius:6px; border:1px solid var(--line); background:var(--bg-input); color:var(--text);">
+      <button id="addBlockedWordBtn" class="btn-flame small">adaugă</button>
+    </div>
+    <div id="blockedWordsList"></div>
+  `;
+
+  const list = document.getElementById('blockedWordsList');
+  if (dynamicBlockedWords.length === 0) {
+    list.innerHTML = '<p style="color:var(--text-faint)">nicio expresie adăugată încă.</p>';
+  } else {
+    dynamicBlockedWords.forEach(({ id, word }) => {
+      const card = document.createElement('div');
+      card.className = 'lb-card';
+      card.innerHTML = `
+        <span class="lb-nick">${escapeHtml(word)}</span>
+        <button class="btn-ghost remove-word-btn" style="border-color:var(--danger); color:var(--danger);">șterge</button>
+      `;
+      card.querySelector('.remove-word-btn').addEventListener('click', async () => {
+        await remove(ref(db, `moderation/blockedWords/${id}`));
+        renderAdmin();
+      });
+      list.appendChild(card);
+    });
+  }
+
+  document.getElementById('addBlockedWordBtn').addEventListener('click', async () => {
+    const input = document.getElementById('newBlockedWord');
+    const word = input.value.trim();
+    if (!word) return;
+    await push(ref(db, 'moderation/blockedWords'), word);
+    input.value = '';
+    renderAdmin();
+  });
+}
+
+/* --- tab: camere --- */
+async function renderAdminRooms() {
+  adminContent.innerHTML = '<p style="color:var(--text-faint)">se încarcă...</p>';
+  const roomsSnap = await get(ref(db, 'rooms'));
+  const rooms = { general: { name: '#general' }, ...(roomsSnap.val() || {}) };
+
+  adminContent.innerHTML = '';
+  Object.entries(rooms).forEach(([id, room]) => {
+    const card = document.createElement('div');
+    card.className = 'lb-card';
+    const isGeneral = id === 'general';
+    card.innerHTML = `
+      <span class="lb-nick">${escapeHtml(room.name || ('#' + id))}</span>
+      <span class="lb-score" style="flex:1;">${isGeneral ? 'cameră principală, nu poate fi ștearsă' : ''}</span>
+      ${isGeneral ? '' : '<button class="btn-ghost delete-room-btn" style="border-color:var(--danger); color:var(--danger);">șterge camera</button>'}
+    `;
+    if (!isGeneral) {
+      card.querySelector('.delete-room-btn').addEventListener('click', async () => {
+        const ok = await showConfirm(`Ștergi definitiv camera "${room.name}" și tot ce conține?`, 'șterge camera');
+        if (!ok) return;
+        await remove(ref(db, `rooms/${id}`));
+        await remove(ref(db, `messages/${id}`));
+        await remove(ref(db, `duels/${id}`));
+        if (currentRoom === id) switchRoom('general');
+        renderAdmin();
+      });
+    }
     adminContent.appendChild(card);
   });
 }
