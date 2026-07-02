@@ -2,19 +2,17 @@ import { firebaseConfig } from './firebase-config.js';
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
   getDatabase, ref, push, set, update, remove, get, onValue,
-  query, orderByChild, serverTimestamp, onDisconnect
+  query, orderByChild, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 import {
   getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword,
-  GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult,
-  setPersistence, browserLocalPersistence, signInAnonymously,
+  GoogleAuthProvider, signInWithPopup, signInAnonymously,
   sendPasswordResetEmail, onAuthStateChanged, signOut
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 const auth = getAuth(app);
-const googleProvider = new GoogleAuthProvider();
 
 /* -------------------------------------------------------------
    CONFIG DE MODERARE
@@ -35,7 +33,9 @@ const PERSPECTIVE_API_KEY = '';
    Adaugă propriile tale cuvinte/expresii (regex, case-insensitive)
    in lista de mai jos.
 ------------------------------------------------------------- */
-let HATE_SPEECH_PATTERNS = [];
+const HATE_SPEECH_PATTERNS = [
+  // exemplu: /cuvant-interzis/i,
+];
 
 // normalizează textul ca să prindă și variații gen "c-u-v-a-n-t", "cuv4nt"
 function normalizeForFilter(text) {
@@ -93,7 +93,6 @@ let currentRoom = 'general';
 let roomsCache = { general: { name: '#general' } };
 let currentUid = null;
 let isAdmin = false;
-let pendingQuickNick = null;
 let lastSendAt = 0;
 
 const gate = document.getElementById('gate');
@@ -109,7 +108,6 @@ const bannedNotice = document.getElementById('bannedNotice');
 const quickEntryBox = document.getElementById('quickEntryBox');
 const accountBox = document.getElementById('accountBox');
 const claimNicknameBox = document.getElementById('claimNicknameBox');
-const localWarning = document.getElementById('localWarning');
 const tabLogin = document.getElementById('tabLogin');
 const tabSignup = document.getElementById('tabSignup');
 const emailInput = document.getElementById('emailInput');
@@ -121,35 +119,22 @@ const authError = document.getElementById('authError');
 const claimNickInput = document.getElementById('claimNickInput');
 const claimNickBtn = document.getElementById('claimNickBtn');
 const claimError = document.getElementById('claimError');
-const isLocalFileOpen = window.location.protocol === 'file:';
 
 const roomList = document.getElementById('roomList');
-const presenceList = document.getElementById('presenceList');
 const newRoomName = document.getElementById('newRoomName');
 const createRoomBtn = document.getElementById('createRoomBtn');
 const roomTitle = document.getElementById('roomTitle');
-const roomNotification = document.getElementById('roomNotification');
 const feed = document.getElementById('feed');
 const msgInput = document.getElementById('msgInput');
 const sendBtn = document.getElementById('sendBtn');
 const filterWarning = document.getElementById('filterWarning');
 
 const duelBtn = document.getElementById('duelBtn');
-const shareRoomBtn = document.getElementById('shareRoomBtn');
-const profileBtn = document.getElementById('profileBtn');
-const profileModal = document.getElementById('profileModal');
-const profileContent = document.getElementById('profileContent');
-const closeProfileModal = document.getElementById('closeProfileModal');
 const duelModal = document.getElementById('duelModal');
 const duelOpponent = document.getElementById('duelOpponent');
 const duelOpening = document.getElementById('duelOpening');
 const duelCancelBtn = document.getElementById('duelCancelBtn');
 const duelSendBtn = document.getElementById('duelSendBtn');
-
-const newFilterInput = document.getElementById('newFilterInput');
-const addFilterBtn = document.getElementById('addFilterBtn');
-const filterList = document.getElementById('filterList');
-const filterAdminMsg = document.getElementById('filterAdminMsg');
 
 const leaderboardBtn = document.getElementById('leaderboardBtn');
 const backToRoomBtn = document.getElementById('backToRoomBtn');
@@ -162,6 +147,34 @@ const adminView = document.getElementById('adminView');
 const adminContent = document.getElementById('adminContent');
 const backToRoomFromAdminBtn = document.getElementById('backToRoomFromAdminBtn');
 
+/* ---------------- CONFIRM MODAL (înlocuiește confirm() nativ) ---------------- */
+
+const confirmModal = document.getElementById('confirmModal');
+const confirmTitle = document.getElementById('confirmTitle');
+const confirmMessage = document.getElementById('confirmMessage');
+const confirmOkBtn = document.getElementById('confirmOkBtn');
+const confirmCancelBtn = document.getElementById('confirmCancelBtn');
+
+function showConfirm(message, title = 'confirmă') {
+  return new Promise((resolve) => {
+    confirmTitle.textContent = title;
+    confirmMessage.textContent = message;
+    confirmModal.classList.remove('hidden');
+
+    function cleanup(result) {
+      confirmModal.classList.add('hidden');
+      confirmOkBtn.removeEventListener('click', onOk);
+      confirmCancelBtn.removeEventListener('click', onCancel);
+      resolve(result);
+    }
+    function onOk() { cleanup(true); }
+    function onCancel() { cleanup(false); }
+
+    confirmOkBtn.addEventListener('click', onOk);
+    confirmCancelBtn.addEventListener('click', onCancel);
+  });
+}
+
 function resetGateView() {
   quickEntryBox.classList.remove('hidden');
   accountBox.classList.remove('hidden');
@@ -170,7 +183,6 @@ function resetGateView() {
   authError.classList.add('hidden');
   claimError.classList.add('hidden');
   nickTakenWarning.classList.add('hidden');
-  if (localWarning) localWarning.classList.add('hidden');
 }
 
 async function isBanned(uid) {
@@ -184,156 +196,6 @@ function showBannedNotice() {
   accountBox.classList.add('hidden');
   claimNicknameBox.classList.add('hidden');
   bannedNotice.classList.remove('hidden');
-}
-
-let currentProfile = { nickname: '', email: 'anonim', score: 0, badges: [] };
-let duelNotificationUnsubscribe = null;
-let notifiedDuelIds = new Set();
-
-async function loadCurrentUserProfile() {
-  currentProfile = { nickname: currentNick, email: 'anonim', score: 0, badges: [] };
-  if (!currentUid) return;
-  const userSnap = await get(ref(db, `users/${currentUid}`));
-  const userData = userSnap.val() || {};
-  currentProfile = {
-    nickname: currentNick,
-    email: userData.email || 'anonim',
-    score: userData.score || 0,
-    badges: userData.badges || [],
-  };
-}
-
-function renderUserProfile() {
-  profileContent.innerHTML = `
-    <h3 style="margin-top:0;">profil ${escapeHtml(currentProfile.nickname)}</h3>
-    <p style="color:var(--text-faint); margin:0 0 12px;">email: ${escapeHtml(currentProfile.email)}</p>
-    <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:12px;">${currentProfile.badges.map((b) => `<span class="lb-tier ${b}">${escapeHtml(b)}</span>`).join('')}</div>
-    <p style="margin:0 0 10px;">scor total: <strong>${currentProfile.score}</strong></p>
-    <button id="saveProfileBadgeBtn" class="btn-ghost">adauga badge demo</button>
-  `;
-  const saveBadgeBtn = document.getElementById('saveProfileBadgeBtn');
-  saveBadgeBtn.addEventListener('click', async () => {
-    const newBadge = 'bronze';
-    currentProfile.badges = Array.from(new Set([...currentProfile.badges, newBadge]));
-    if (currentUid) {
-      await update(ref(db, `users/${currentUid}`), { badges: currentProfile.badges });
-    }
-    renderUserProfile();
-  });
-}
-
-let presenceListenerUnsubscribe = null;
-let currentPresenceRef = null;
-
-async function leavePresence() {
-  if (!currentPresenceRef) return;
-  try {
-    await remove(currentPresenceRef);
-  } catch (e) {
-    // ignorăm erorile de cleanup
-  }
-  currentPresenceRef = null;
-}
-
-async function listenPresence() {
-  if (!currentUid) return;
-  await leavePresence();
-  const presenceRef = ref(db, `presence/${currentRoom}/${currentUid}`);
-  currentPresenceRef = presenceRef;
-  await set(presenceRef, { nick: currentNick, online: true, ts: Date.now() });
-  onDisconnect(presenceRef).remove();
-}
-
-function renderPresence(roomId) {
-  if (presenceListenerUnsubscribe) {
-    presenceListenerUnsubscribe();
-    presenceListenerUnsubscribe = null;
-  }
-  const presenceRef = ref(db, `presence/${roomId}`);
-  presenceListenerUnsubscribe = onValue(presenceRef, (snap) => {
-    const users = snap.val() || {};
-    presenceList.innerHTML = '';
-    Object.entries(users).forEach(([uid, user]) => {
-      const item = document.createElement('div');
-      item.className = 'room-item';
-      item.innerHTML = `<span>${escapeHtml(user.nick || 'anonim')}</span><span class="${user.online ? 'presence-online' : 'presence-offline'}"></span>`;
-      presenceList.appendChild(item);
-    });
-  });
-}
-
-function showRoomNotification(message) {
-  roomNotification.textContent = message;
-  roomNotification.classList.remove('hidden');
-  setTimeout(() => roomNotification.classList.add('hidden'), 5000);
-}
-
-function openProfileModal() {
-  profileModal.classList.remove('hidden');
-  renderUserProfile();
-}
-
-function closeProfileModalHandler() {
-  profileModal.classList.add('hidden');
-}
-
-function watchDuelNotifications(roomId) {
-  if (duelNotificationUnsubscribe) {
-    duelNotificationUnsubscribe();
-    duelNotificationUnsubscribe = null;
-  }
-  const duelsRef = ref(db, `duels/${roomId}`);
-  duelNotificationUnsubscribe = onValue(duelsRef, (snap) => {
-    const duels = snap.val() || {};
-    Object.entries(duels).forEach(([id, duel]) => {
-      if (duel.opponent === currentNick && !duel.opponentText && !notifiedDuelIds.has(id)) {
-        showRoomNotification(`Ai fost provocat la duel de ${escapeHtml(duel.challenger)}!`);
-        notifiedDuelIds.add(id);
-      }
-    });
-  });
-}
-
-async function updateAdminFilterUI() {
-  const patternsSnap = await get(ref(db, 'adminFilters'));
-  const patterns = patternsSnap.val() || [];
-  HATE_SPEECH_PATTERNS = patterns.map((pattern) => {
-    try { return new RegExp(pattern, 'i'); } catch (e) { return null; }
-  }).filter(Boolean);
-  filterList.innerHTML = '';
-  patterns.forEach((pattern) => {
-    const div = document.createElement('div');
-    div.className = 'filter-tag';
-    div.innerHTML = `${escapeHtml(pattern)} <button type="button">✕</button>`;
-    div.querySelector('button').addEventListener('click', async () => {
-      const remaining = patterns.filter((p) => p !== pattern);
-      await set(ref(db, 'adminFilters'), remaining);
-      filterAdminMsg.textContent = `filtrul "${pattern}" a fost șters.`;
-      updateAdminFilterUI();
-    });
-    filterList.appendChild(div);
-  });
-  filterAdminMsg.textContent = `filtre active: ${patterns.length}`;
-}
-
-addFilterBtn.addEventListener('click', async () => {
-  const pattern = newFilterInput.value.trim();
-  if (!pattern) return;
-  const patternsSnap = await get(ref(db, 'adminFilters'));
-  const patterns = patternsSnap.val() || [];
-  if (patterns.includes(pattern)) {
-    filterAdminMsg.textContent = 'Acest filtru există deja.';
-    return;
-  }
-  await set(ref(db, 'adminFilters'), [...patterns, pattern]);
-  newFilterInput.value = '';
-  updateAdminFilterUI();
-  filterAdminMsg.textContent = `filtrul "${pattern}" a fost adăugat.`;
-});
-
-async function refreshPresenceAndProfile(roomId) {
-  await listenPresence();
-  await renderPresence(roomId);
 }
 
 async function enterArena(nick, uid, isAccount) {
@@ -353,17 +215,10 @@ async function enterArena(nick, uid, isAccount) {
   gate.classList.add('hidden');
   appEl.classList.remove('hidden');
   listenRooms();
-  await loadCurrentUserProfile();
-  const hashedRoom = getRoomFromHash();
-  switchRoom(hashedRoom || 'general');
+  switchRoom('general');
 }
 
 async function tryQuickEntry(nick) {
-  if (isLocalFileOpen) {
-    authError.textContent = 'Nu poți folosi autentificarea locală din fișierele file://. Rulează proiectul pe un server local sau public.';
-    authError.classList.remove('hidden');
-    return;
-  }
   nick = nick.trim().slice(0, 24);
   if (!nick) return;
   const claimSnap = await get(ref(db, `nicknames/${nick.toLowerCase()}`));
@@ -372,28 +227,19 @@ async function tryQuickEntry(nick) {
     return;
   }
   nickTakenWarning.classList.add('hidden');
-  pendingQuickNick = nick;
   try {
-    await signInAnonymously(auth);
-    // onAuthStateChanged preia de aici și intră în arenă
+    const credential = await signInAnonymously(auth);
+    // intrăm direct cu uid-ul primit, nu așteptăm onAuthStateChanged —
+    // dacă exista deja o sesiune anonimă (de ieri, de ex.), evenimentul
+    // ăla nu se mai declanșează a doua oară.
+    await enterArena(nick, credential.user.uid, false);
   } catch (e) {
-    pendingQuickNick = null;
-    authError.textContent = friendlyAuthError(e.code || e.message || 'unknown');
-    authError.classList.remove('hidden');
+    alert('Nu s-a putut porni sesiunea. Încearcă din nou.');
   }
 }
 
 if (currentNick) {
   nickInput.value = currentNick;
-}
-if (isLocalFileOpen) {
-  if (localWarning) localWarning.classList.remove('hidden');
-  quickEntryBox.classList.add('hidden');
-  accountBox.classList.add('hidden');
-  claimNicknameBox.classList.add('hidden');
-  enterBtn.disabled = true;
-  emailAuthBtn.disabled = true;
-  googleBtn.disabled = true;
 }
 enterBtn.addEventListener('click', () => tryQuickEntry(nickInput.value));
 nickInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') tryQuickEntry(nickInput.value); });
@@ -403,7 +249,6 @@ changeNickBtn.addEventListener('click', async () => {
     // sesiune anonimă — o închidem ca să poată alege altă poreclă curat
     try { await signOut(auth); } catch (e) {}
   }
-  localStorage.removeItem('roastarena_nick');
   appEl.classList.add('hidden');
   gate.classList.remove('hidden');
   resetGateView();
@@ -411,7 +256,6 @@ changeNickBtn.addEventListener('click', async () => {
 
 signOutBtn.addEventListener('click', async () => {
   await signOut(auth);
-  localStorage.removeItem('roastarena_nick');
   appEl.classList.add('hidden');
   gate.classList.remove('hidden');
   resetGateView();
@@ -433,7 +277,7 @@ tabSignup.addEventListener('click', () => {
   emailAuthBtn.textContent = 'creează cont';
 });
 
-function friendlyAuthError(codeOrMessage) {
+function friendlyAuthError(code) {
   const map = {
     'auth/invalid-email': 'email invalid.',
     'auth/email-already-in-use': 'există deja un cont cu acest email — încearcă autentificare.',
@@ -442,38 +286,17 @@ function friendlyAuthError(codeOrMessage) {
     'auth/wrong-password': 'email sau parolă greșite.',
     'auth/user-not-found': 'nu există cont cu acest email — încearcă "cont nou".',
     'auth/popup-closed-by-user': 'fereastra Google a fost închisă înainte de autentificare.',
-    'auth/popup-blocked': 'popup-ul Google a fost blocat de browser. încearcă din nou sau folosește redirect.',
-    'auth/operation-not-supported-in-this-environment': 'browserul tău nu suportă autentificarea prin popup. încearcă din nou sau folosește redirect.',
-    'auth/redirect-cancelled-by-user': 'autentificarea Google a fost anulată. încearcă din nou.',
-    'auth/cancelled-popup-request': 'cererea Google a fost anulată. încearcă din nou.',
-    'auth/operation-not-allowed': 'autentificarea nu este activată în Firebase. activează Email/Password și/sau Google în consola Firebase.',
-    'auth/unauthorized-domain': `domeniul ${window.location.host} nu este autorizat în Firebase Auth. adaugă domeniul în consola Firebase.`,
-    'auth/network-request-failed': 'eroare de rețea. verifică conexiunea la internet.',
-    'auth/web-storage-unsupported': 'browserul tău nu suportă stocare necesară Firebase Auth.',
     'auth/missing-email': 'scrie mai întâi emailul, apoi apasă din nou.',
   };
-
-  let code = codeOrMessage;
-  if (typeof codeOrMessage === 'string') {
-    const match = codeOrMessage.match(/auth\/[a-zA-Z-]+/);
-    if (match) code = match[0];
-  }
-
-  return map[code] || `ceva n-a mers. cod eroare: ${code || 'unknown'}`;
+  return map[code] || 'ceva n-a mers. încearcă din nou.';
 }
 
 emailAuthBtn.addEventListener('click', async () => {
-  if (isLocalFileOpen) {
-    authError.textContent = 'Nu poți folosi autentificarea locală din fișierele file://. Rulează proiectul pe un server local sau public.';
-    authError.classList.remove('hidden');
-    return;
-  }
   const email = emailInput.value.trim();
   const password = passwordInput.value;
   authError.classList.add('hidden');
   if (!email || !password) return;
   try {
-    await setPersistence(auth, browserLocalPersistence);
     if (authMode === 'signup') {
       await createUserWithEmailAndPassword(auth, email, password);
     } else {
@@ -481,7 +304,7 @@ emailAuthBtn.addEventListener('click', async () => {
     }
     // onAuthStateChanged preia de aici
   } catch (err) {
-    authError.textContent = friendlyAuthError(err.code || err.message);
+    authError.textContent = friendlyAuthError(err.code);
     authError.classList.remove('hidden');
   }
 });
@@ -506,57 +329,22 @@ forgotPasswordLink.addEventListener('click', async (e) => {
 });
 
 googleBtn.addEventListener('click', async () => {
-  if (isLocalFileOpen) {
-    authError.textContent = 'Nu poți folosi autentificarea locală din fișierele file://. Rulează proiectul pe un server local sau public.';
-    authError.classList.remove('hidden');
-    return;
-  }
   authError.classList.add('hidden');
   try {
-    await setPersistence(auth, browserLocalPersistence);
-    await signInWithPopup(auth, googleProvider);
+    await signInWithPopup(auth, new GoogleAuthProvider());
   } catch (err) {
-    console.warn('Google auth failed, falling back if possible:', err);
-    const fallbackCodes = new Set([
-      'auth/popup-blocked',
-      'auth/popup-closed-by-user',
-      'auth/cancelled-popup-request',
-      'auth/operation-not-supported-in-this-environment',
-    ]);
-
-    if (fallbackCodes.has(err.code)) {
-      try {
-        await signInWithRedirect(auth, googleProvider);
-      } catch (redirectErr) {
-        console.error('Google redirect auth failed:', redirectErr);
-        authError.textContent = friendlyAuthError(redirectErr.code || redirectErr.message);
-        authError.classList.remove('hidden');
-      }
-    } else {
-      authError.textContent = friendlyAuthError(err.code || err.message);
-      authError.classList.remove('hidden');
-    }
+    authError.textContent = friendlyAuthError(err.code);
+    authError.classList.remove('hidden');
   }
-});
-
-getRedirectResult(auth).then((result) => {
-  if (result && result.user) {
-    // utilizator logat prin redirect; onAuthStateChanged îl va prelua
-  }
-}).catch((err) => {
-  authError.textContent = friendlyAuthError(err.code || err.message);
-  authError.classList.remove('hidden');
 });
 
 onAuthStateChanged(auth, async (user) => {
   if (!user) return;
 
   if (user.isAnonymous) {
-    const nick = pendingQuickNick || currentNick;
-    if (nick) {
-      pendingQuickNick = null;
-      await enterArena(nick, user.uid, false);
-    }
+    // sesiune anonimă existentă (posibil de la o vizită anterioară) —
+    // nu intrăm automat, așteptăm ca omul să apese "intră rapid" cu o
+    // poreclă; tryQuickEntry() gestionează direct intrarea în arenă.
     return;
   }
 
@@ -631,38 +419,12 @@ function switchRoom(roomId) {
   currentRoom = roomId;
   roomTitle.textContent = (roomsCache[roomId] && roomsCache[roomId].name) || ('#' + roomId);
   renderRoomList();
-  updateRoomHash(roomId);
-  refreshPresenceAndProfile(roomId);
-  watchDuelNotifications(roomId);
   listenFeed(roomId);
-}
-
-function getRoomFromHash() {
-  const hash = window.location.hash.slice(1);
-  if (!hash) return null;
-  if (hash.startsWith('room=')) {
-    return decodeURIComponent(hash.slice(5));
-  }
-  return null;
-}
-
-function updateRoomHash(roomId) {
-  if (!roomId) return;
-  const newHash = `room=${encodeURIComponent(roomId)}`;
-  const current = window.location.hash.slice(1);
-  if (current !== newHash) {
-    window.history.replaceState(null, '', `#${newHash}`);
-  }
 }
 
 /* ---------------- MESSAGES + DUELS FEED ---------------- */
 
 function listenFeed(roomId) {
-  if (unsubscribeFeed) {
-    unsubscribeFeed();
-    unsubscribeFeed = null;
-  }
-
   const msgsRef = query(ref(db, `messages/${roomId}`), orderByChild('ts'));
   const duelsRef = query(ref(db, `duels/${roomId}`), orderByChild('ts'));
 
@@ -685,12 +447,8 @@ function listenFeed(roomId) {
     feed.scrollTop = feed.scrollHeight;
   }
 
-  const unsubscribeMsgs = onValue(msgsRef, (snap) => { messages = snap.val() || {}; render(); });
-  const unsubscribeDuels = onValue(duelsRef, (snap) => { duels = snap.val() || {}; render(); });
-  unsubscribeFeed = () => {
-    unsubscribeMsgs();
-    unsubscribeDuels();
-  };
+  onValue(msgsRef, (snap) => { messages = snap.val() || {}; render(); });
+  onValue(duelsRef, (snap) => { duels = snap.val() || {}; render(); });
 }
 
 function timeAgo(ts) {
@@ -726,7 +484,8 @@ function renderMessage(roomId, id, m) {
 }
 
 async function reportMessage(roomId, id, m, btnEl) {
-  if (!confirm('Raportezi acest mesaj moderatorilor?')) return;
+  const ok = await showConfirm('Raportezi acest mesaj moderatorilor?', 'raportează mesajul');
+  if (!ok) return;
   await push(ref(db, `reports/${roomId}`), {
     msgId: id,
     nick: m.nick,
@@ -842,26 +601,6 @@ async function voteDuel(roomId, id, side, myVote) {
 
 sendBtn.addEventListener('click', sendMessage);
 msgInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') sendMessage(); });
-profileBtn.addEventListener('click', openProfileModal);
-closeProfileModal.addEventListener('click', closeProfileModalHandler);
-window.addEventListener('hashchange', () => {
-  const newRoom = getRoomFromHash();
-  if (newRoom && newRoom !== currentRoom) {
-    switchRoom(newRoom);
-  }
-});
-
-shareRoomBtn.addEventListener('click', async () => {
-  const roomUrl = `${window.location.origin}${window.location.pathname}#room=${encodeURIComponent(currentRoom)}`;
-  try {
-    await navigator.clipboard.writeText(roomUrl);
-    const prevText = shareRoomBtn.textContent;
-    shareRoomBtn.textContent = 'copiat!';
-    setTimeout(() => { shareRoomBtn.textContent = prevText; }, 1200);
-  } catch (err) {
-    prompt('Copiază linkul camerei:', roomUrl);
-  }
-});
 
 async function sendMessage() {
   const text = msgInput.value.trim();
@@ -981,7 +720,6 @@ adminBtn.addEventListener('click', async () => {
   roomView.classList.add('hidden');
   leaderboardView.classList.add('hidden');
   adminView.classList.remove('hidden');
-  await updateAdminFilterUI();
   await renderAdmin();
 });
 backToRoomFromAdminBtn.addEventListener('click', () => {
@@ -1034,7 +772,8 @@ async function renderAdmin() {
     });
     card.querySelector('.ban-btn').addEventListener('click', async () => {
       if (!r.reportedUid) return;
-      if (!confirm(`Blochezi definitiv utilizatorul "${r.nick}"?`)) return;
+      const ok = await showConfirm(`Blochezi definitiv utilizatorul "${r.nick}"?`, 'blochează utilizator');
+      if (!ok) return;
       await set(ref(db, `banned/${r.reportedUid}`), { reason: 'raport admin', ts: Date.now() });
       await remove(ref(db, `messages/${r.roomId}/${r.msgId}`));
       await remove(ref(db, `reports/${r.roomId}/${r.reportId}`));
