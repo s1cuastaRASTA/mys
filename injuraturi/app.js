@@ -103,7 +103,7 @@ async function isMessageBlocked(text) {
 
 let currentNick = localStorage.getItem('roastarena_nick') || '';
 let currentRoom = 'general';
-let roomsCache = { general: { name: '#general' } };
+let roomsCache = { general: { name: '#general' }, dueluri: { name: '#dueluri' } };
 let currentUid = null;
 let isAdmin = false;
 let lastSendAt = 0;
@@ -140,6 +140,7 @@ const claimNickBtn = document.getElementById('claimNickBtn');
 const claimError = document.getElementById('claimError');
 
 const roomList = document.getElementById('roomList');
+const composerWrap = document.getElementById('composerWrap');
 const newRoomName = document.getElementById('newRoomName');
 const createRoomBtn = document.getElementById('createRoomBtn');
 const roomTitle = document.getElementById('roomTitle');
@@ -211,16 +212,16 @@ function on(el, event, handler) {
 
 /* ---------------- CONSIMȚĂMÂNT VÂRSTĂ + REGULI ---------------- */
 
-if (localStorage.getItem('roastarena_age_consent') === 'true' && ageConsent) {
+if (localStorage.getItem('roastarena_age_consent_18plus') === 'true' && ageConsent) {
   ageConsent.checked = true;
 }
 
 on(ageConsent, 'change', () => {
   if (ageConsent.checked) {
-    localStorage.setItem('roastarena_age_consent', 'true');
+    localStorage.setItem('roastarena_age_consent_18plus', 'true');
     ageWarning.classList.add('hidden');
   } else {
-    localStorage.removeItem('roastarena_age_consent');
+    localStorage.removeItem('roastarena_age_consent_18plus');
   }
 });
 
@@ -284,35 +285,30 @@ async function enterArena(nick, uid, isAccount) {
   startDuelWatcher();
 }
 
-/* ---------------- NOTIFICARE DUEL (peste toate camerele) ---------------- */
+/* ---------------- NOTIFICARE DUEL ---------------- */
 
-let pendingDuelRoom = null;
+let hasPendingDuel = false;
 
 function startDuelWatcher() {
-  onValue(ref(db, 'duels'), (snap) => {
-    const allDuels = snap.val() || {};
-    pendingDuelRoom = null;
-    for (const [roomId, roomDuels] of Object.entries(allDuels)) {
-      const hit = Object.values(roomDuels).some((d) => {
-        if ((d.status || 'active') !== 'active') return false;
-        if (d.challenger !== currentNick && d.opponent !== currentNick) return false;
-        const turnCount = Object.keys(d.turns || {}).length;
-        const nextSide = turnCount % 2 === 1 ? 'opponent' : 'challenger';
-        const nextNick = nextSide === 'challenger' ? d.challenger : d.opponent;
-        return nextNick === currentNick && turnCount > 0; // nu te notifica despre propriul duel proaspăt creat
-      });
-      if (hit) { pendingDuelRoom = roomId; break; }
-    }
-    duelNoticeBtn.classList.toggle('hidden', !pendingDuelRoom);
+  onValue(ref(db, 'duels/dueluri'), (snap) => {
+    const duels = snap.val() || {};
+    hasPendingDuel = Object.values(duels).some((d) => {
+      if ((d.status || 'active') !== 'active') return false;
+      if (d.challenger !== currentNick && d.opponent !== currentNick) return false;
+      const turnCount = Object.keys(d.turns || {}).length;
+      const nextSide = turnCount % 2 === 1 ? 'opponent' : 'challenger';
+      const nextNick = nextSide === 'challenger' ? d.challenger : d.opponent;
+      return nextNick === currentNick && turnCount > 0;
+    });
+    duelNoticeBtn.classList.toggle('hidden', !hasPendingDuel);
   });
 }
 
 on(duelNoticeBtn, 'click', () => {
-  if (!pendingDuelRoom) return;
   leaderboardView.classList.add('hidden');
   adminView.classList.add('hidden');
   roomView.classList.remove('hidden');
-  switchRoom(pendingDuelRoom);
+  switchRoom('dueluri');
 });
 
 async function tryQuickEntry(nick) {
@@ -486,7 +482,7 @@ function listenRooms() {
   const roomsRef = ref(db, 'rooms');
   onValue(roomsRef, (snap) => {
     const data = snap.val() || {};
-    roomsCache = { general: { name: '#general' }, ...data };
+    roomsCache = { general: { name: '#general' }, dueluri: { name: '#dueluri' }, ...data };
     renderRoomList();
   });
 }
@@ -513,42 +509,48 @@ on(createRoomBtn, 'click', async () => {
   switchRoom(newRef.key);
 });
 
-let unsubscribeFeed = null;
+let unsubscribeFeed = [];
 
 function switchRoom(roomId) {
   currentRoom = roomId;
   roomTitle.textContent = (roomsCache[roomId] && roomsCache[roomId].name) || ('#' + roomId);
   renderRoomList();
-  listenFeed(roomId);
+
+  // oprim listener-ele camerei anterioare, altfel rămân active la infinit
+  unsubscribeFeed.forEach((unsub) => unsub && unsub());
+  unsubscribeFeed = [];
+
+  if (roomId === 'dueluri') {
+    composerWrap.classList.add('hidden');
+    unsubscribeFeed.push(listenDuelsRoom());
+  } else {
+    composerWrap.classList.remove('hidden');
+    unsubscribeFeed = listenFeed(roomId);
+  }
 }
 
 /* ---------------- MESSAGES + DUELS FEED ---------------- */
 
 function listenFeed(roomId) {
   const msgsRef = query(ref(db, `messages/${roomId}`), orderByChild('ts'), limitToLast(150));
-  const duelsRef = query(ref(db, `duels/${roomId}`), orderByChild('ts'), limitToLast(40));
 
-  let messages = {};
-  let duels = {};
-
-  function render() {
-    const items = [
-      ...Object.entries(messages).map(([id, m]) => ({ type: 'msg', id, ts: m.ts || 0, data: m })),
-      ...Object.entries(duels).map(([id, d]) => ({ type: 'duel', id, ts: d.ts || 0, data: d })),
-    ].sort((a, b) => a.ts - b.ts);
+  function render(messages) {
+    const items = Object.entries(messages)
+      .map(([id, m]) => ({ id, ts: m.ts || 0, data: m }))
+      .sort((a, b) => a.ts - b.ts);
 
     feed.innerHTML = '';
     if (items.length === 0) {
       feed.innerHTML = '<p style="color:var(--text-faint)">nimic aici încă. fii primul care aruncă o replică.</p>';
     }
     items.forEach((item) => {
-      feed.appendChild(item.type === 'msg' ? renderMessage(roomId, item.id, item.data) : renderDuel(roomId, item.id, item.data));
+      feed.appendChild(renderMessage(roomId, item.id, item.data));
     });
     feed.scrollTop = feed.scrollHeight;
   }
 
-  onValue(msgsRef, (snap) => { messages = snap.val() || {}; render(); });
-  onValue(duelsRef, (snap) => { duels = snap.val() || {}; render(); });
+  const unsub = onValue(msgsRef, (snap) => render(snap.val() || {}));
+  return [unsub];
 }
 
 function timeAgo(ts) {
@@ -614,15 +616,73 @@ async function toggleVote(roomId, id, alreadyVoted) {
   }
 }
 
-function renderDuel(roomId, id, d) {
-  const el = document.createElement('div');
-  el.className = 'duel';
+/* ---------------- CAMERA #dueluri ---------------- */
+
+let expandedDuels = new Set();
+let duelsCache = {};
+
+function listenDuelsRoom() {
+  const duelsRef = query(ref(db, 'duels/dueluri'), orderByChild('ts'), limitToLast(100));
+  const unsub = onValue(duelsRef, (snap) => {
+    duelsCache = snap.val() || {};
+    renderDuelsList();
+  });
+  return unsub;
+}
+
+function renderDuelsList() {
+  const entries = Object.entries(duelsCache).sort((a, b) => (b[1].ts || 0) - (a[1].ts || 0));
+  feed.innerHTML = '';
+  if (entries.length === 0) {
+    feed.innerHTML = '<p style="color:var(--text-faint)">niciun duel încă. apasă "⚔️ provoacă la duel" ca să începi unul.</p>';
+    return;
+  }
+  entries.forEach(([id, d]) => feed.appendChild(renderDuelCard(id, d)));
+}
+
+function renderDuelCard(id, d) {
   const turns = Object.entries(d.turns || {})
     .map(([tid, t]) => ({ tid, ...t }))
     .sort((a, b) => (a.ts || 0) - (b.ts || 0));
   const turnCount = turns.length;
   const status = d.status || 'active';
   const isParticipant = currentNick === d.challenger || currentNick === d.opponent;
+  const nextSide = turnCount % 2 === 1 ? 'opponent' : 'challenger';
+  const nextNick = nextSide === 'challenger' ? d.challenger : d.opponent;
+  const yourTurn = status === 'active' && isParticipant && nextNick === currentNick;
+  const isExpanded = expandedDuels.has(id);
+  const lastTurn = turns[turns.length - 1];
+  const preview = lastTurn ? `${lastTurn.side === 'challenger' ? d.challenger : d.opponent}: ${lastTurn.text}` : 'niciun mesaj încă';
+
+  const el = document.createElement('div');
+  el.className = 'duel';
+
+  const statusTag = status === 'closed'
+    ? ' · <span style="color:var(--text-faint); font-weight:400;">încheiat</span>'
+    : yourTurn
+      ? ' · <span style="color:var(--flame-1); font-weight:700;">e rândul tău</span>'
+      : '';
+
+  const header = document.createElement('div');
+  header.style.cursor = 'pointer';
+  header.style.display = 'flex';
+  header.style.justifyContent = 'space-between';
+  header.style.alignItems = 'flex-start';
+  header.style.gap = '10px';
+  header.innerHTML = `
+    <div style="min-width:0;">
+      <div class="duel-title" style="margin-bottom:4px;">⚔️ ${escapeHtml(d.challenger)} vs ${escapeHtml(d.opponent)}${statusTag}</div>
+      <p style="color:var(--text-faint); font-size:12px; margin:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(preview)}</p>
+    </div>
+    <span style="color:var(--text-faint); flex-shrink:0;">${isExpanded ? '▲' : '▼'}</span>
+  `;
+  header.addEventListener('click', () => {
+    if (isExpanded) expandedDuels.delete(id); else expandedDuels.add(id);
+    renderDuelsList();
+  });
+  el.appendChild(header);
+
+  if (!isExpanded) return el;
 
   const transcriptHtml = turns.length
     ? turns.map((t) => {
@@ -631,14 +691,12 @@ function renderDuel(roomId, id, d) {
       }).join('')
     : '<p style="color:var(--text-faint); font-size:12px;">niciun mesaj încă...</p>';
 
-  el.innerHTML = `
-    <div class="duel-title">⚔️ duel: ${escapeHtml(d.challenger)} vs ${escapeHtml(d.opponent)}${status === 'closed' ? ' · <span style="color:var(--text-faint); font-weight:400;">încheiat</span>' : ''}</div>
-    <div class="duel-transcript">${transcriptHtml}</div>
-  `;
+  const body = document.createElement('div');
+  body.style.marginTop = '10px';
+  body.innerHTML = `<div class="duel-transcript">${transcriptHtml}</div>`;
+  el.appendChild(body);
 
   if (status === 'active') {
-    const nextSide = turnCount % 2 === 1 ? 'opponent' : 'challenger';
-    const nextNick = nextSide === 'challenger' ? d.challenger : d.opponent;
     const actionsRow = document.createElement('div');
     actionsRow.style.marginTop = '10px';
     actionsRow.style.display = 'flex';
@@ -667,7 +725,7 @@ function renderDuel(roomId, id, d) {
           sendTurnBtn.disabled = false;
           return;
         }
-        await push(ref(db, `duels/${roomId}/${id}/turns`), { side: nextSide, uid: currentUid, text, ts: Date.now() });
+        await push(ref(db, `duels/dueluri/${id}/turns`), { side: nextSide, uid: currentUid, text, ts: Date.now() });
         input.value = '';
       });
       actionsRow.appendChild(input);
@@ -689,7 +747,7 @@ function renderDuel(roomId, id, d) {
       closeBtn.addEventListener('click', async () => {
         const ok = await showConfirm('Închizi duelul aici și deschizi votul comunității?', 'închide duelul');
         if (!ok) return;
-        await update(ref(db, `duels/${roomId}/${id}`), { status: 'closed' });
+        await update(ref(db, `duels/dueluri/${id}`), { status: 'closed' });
       });
       actionsRow.appendChild(closeBtn);
     }
@@ -713,7 +771,7 @@ function renderDuel(roomId, id, d) {
       </div>
     `;
     voteRow.querySelectorAll('.duel-side').forEach((sideEl) => {
-      sideEl.addEventListener('click', () => voteDuel(roomId, id, sideEl.dataset.side, myVote));
+      sideEl.addEventListener('click', () => voteDuel('dueluri', id, sideEl.dataset.side, myVote));
     });
     el.appendChild(voteRow);
   }
@@ -787,7 +845,7 @@ on(duelSendBtn, 'click', async () => {
     return;
   }
   lastSendAt = now;
-  const duelsRef = ref(db, `duels/${currentRoom}`);
+  const duelsRef = ref(db, 'duels/dueluri');
   const newDuelRef = push(duelsRef);
   await set(newDuelRef, {
     challenger: currentNick,
@@ -798,7 +856,7 @@ on(duelSendBtn, 'click', async () => {
     opponentVotes: 0,
     ts: Date.now(),
   });
-  await push(ref(db, `duels/${currentRoom}/${newDuelRef.key}/turns`), {
+  await push(ref(db, `duels/dueluri/${newDuelRef.key}/turns`), {
     side: 'challenger',
     uid: currentUid,
     text: opening,
@@ -808,6 +866,8 @@ on(duelSendBtn, 'click', async () => {
   duelOpening.value = '';
   duelModal.classList.add('hidden');
   duelSendBtn.disabled = false;
+  expandedDuels.add(newDuelRef.key);
+  switchRoom('dueluri');
 });
 
 /* ---------------- LEADERBOARD ---------------- */
@@ -1027,25 +1087,24 @@ async function renderAdminWords() {
 async function renderAdminRooms() {
   adminContent.innerHTML = '<p style="color:var(--text-faint)">se încarcă...</p>';
   const roomsSnap = await get(ref(db, 'rooms'));
-  const rooms = { general: { name: '#general' }, ...(roomsSnap.val() || {}) };
+  const rooms = { general: { name: '#general' }, dueluri: { name: '#dueluri' }, ...(roomsSnap.val() || {}) };
 
   adminContent.innerHTML = '';
   Object.entries(rooms).forEach(([id, room]) => {
     const card = document.createElement('div');
     card.className = 'lb-card';
-    const isGeneral = id === 'general';
+    const isFixed = id === 'general' || id === 'dueluri';
     card.innerHTML = `
       <span class="lb-nick">${escapeHtml(room.name || ('#' + id))}</span>
-      <span class="lb-score" style="flex:1;">${isGeneral ? 'cameră principală, nu poate fi ștearsă' : ''}</span>
-      ${isGeneral ? '' : '<button class="btn-ghost delete-room-btn" style="border-color:var(--danger); color:var(--danger);">șterge camera</button>'}
+      <span class="lb-score" style="flex:1;">${isFixed ? 'cameră fixă, nu poate fi ștearsă' : ''}</span>
+      ${isFixed ? '' : '<button class="btn-ghost delete-room-btn" style="border-color:var(--danger); color:var(--danger);">șterge camera</button>'}
     `;
-    if (!isGeneral) {
+    if (!isFixed) {
       card.querySelector('.delete-room-btn').addEventListener('click', async () => {
         const ok = await showConfirm(`Ștergi definitiv camera "${room.name}" și tot ce conține?`, 'șterge camera');
         if (!ok) return;
         await remove(ref(db, `rooms/${id}`));
         await remove(ref(db, `messages/${id}`));
-        await remove(ref(db, `duels/${id}`));
         if (currentRoom === id) switchRoom('general');
         renderAdmin();
       });

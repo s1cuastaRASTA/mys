@@ -19,7 +19,7 @@
 
     <label class="consent-row">
       <input type="checkbox" id="ageConsent">
-      <span>confirm că am cel puțin 16 ani și accept <span id="rulesMore">regulile</span></span>
+      <span>confirm că am cel puțin 18 ani și accept <span id="rulesMore">regulile</span></span>
     </label>
     <p id="ageWarning" class="filter-warning hidden">trebuie să bifezi asta înainte să continui.</p>
 
@@ -57,7 +57,7 @@
 
     <p class="gate-rules">fără atacuri pe bază de rasă, etnie, orientare sau dizabilitate. restul e liber.</p>
 
-    <p class="gate-eyebrow" id="versionTag" style="margin-top:24px;">V 0.0.0.1</p>
+    <p class="gate-eyebrow" id="versionTag" style="margin-top:24px;">V 0.0.1.0</p>
   </div>
 </div>
 
@@ -100,11 +100,13 @@
 
         <div id="feed" class="feed"></div>
 
-        <div class="composer">
-          <input id="msgInput" type="text" placeholder="scrie o injurătură cu stil..." maxlength="280">
-          <button id="sendBtn" class="btn-flame">trimite</button>
+        <div id="composerWrap">
+          <div class="composer">
+            <input id="msgInput" type="text" placeholder="scrie o injurătură cu stil..." maxlength="280">
+            <button id="sendBtn" class="btn-flame">trimite</button>
+          </div>
+          <p id="filterWarning" class="filter-warning hidden">mesajul a fost blocat — conține limbaj interzis (atac pe bază de rasă/etnie/orientare/dizabilitate), nu genul de injurătură creativă cu care ne mândrim aici.</p>
         </div>
-        <p id="filterWarning" class="filter-warning hidden">mesajul a fost blocat — conține limbaj interzis (atac pe bază de rasă/etnie/orientare/dizabilitate), nu genul de injurătură creativă cu care ne mândrim aici.</p>
       </div>
 
       <div id="leaderboardView" class="hidden">
@@ -161,7 +163,7 @@
   <div class="modal-box" style="max-width:480px;">
     <h3>📜 regulile arenei</h3>
     <div class="modal-sub" style="text-align:left; line-height:1.8;">
-      <p><strong>Vârstă minimă:</strong> 16 ani. Limbajul de aici e dur, intenționat.</p>
+      <p><strong>Vârstă minimă:</strong> 18 ani. Limbajul de aici e dur, intenționat.</p>
       <p><strong>Ce e liber:</strong> injurături, mișto, sarcasm, glume dure la adresa gusturilor, stilului, inteligenței cuiva — spiritul clasic de "roast".</p>
       <p><strong>Ce e interzis:</strong> atacuri pe bază de rasă, etnie, naționalitate, religie, orientare sexuală, identitate de gen sau dizabilitate. Nu contează cum le formulezi — dacă țintesc una din categoriile astea, mesajul e blocat sau șters.</p>
       <p><strong>Dacă cineva încalcă regulile:</strong> orice mesaj poate fi raportat (🚩). Un moderator uman verifică raportul și poate șterge mesajul și bloca definitiv autorul.</p>
