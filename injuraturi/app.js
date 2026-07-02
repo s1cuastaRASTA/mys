@@ -2,7 +2,7 @@ import { firebaseConfig } from './firebase-config.js';
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
   getDatabase, ref, push, set, update, remove, get, onValue,
-  query, orderByChild, serverTimestamp
+  query, orderByChild, limitToLast, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 import {
   getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword,
@@ -117,6 +117,12 @@ const whoNick = document.getElementById('whoNick');
 const changeNickBtn = document.getElementById('changeNick');
 const signOutBtn = document.getElementById('signOutBtn');
 const bannedNotice = document.getElementById('bannedNotice');
+const ageConsent = document.getElementById('ageConsent');
+const ageWarning = document.getElementById('ageWarning');
+const rulesMore = document.getElementById('rulesMore');
+const rulesModal = document.getElementById('rulesModal');
+const rulesCloseBtn = document.getElementById('rulesCloseBtn');
+const duelNoticeBtn = document.getElementById('duelNotice');
 
 const quickEntryBox = document.getElementById('quickEntryBox');
 const accountBox = document.getElementById('accountBox');
@@ -203,6 +209,37 @@ function on(el, event, handler) {
   el.addEventListener(event, handler);
 }
 
+/* ---------------- CONSIMȚĂMÂNT VÂRSTĂ + REGULI ---------------- */
+
+if (localStorage.getItem('roastarena_age_consent') === 'true' && ageConsent) {
+  ageConsent.checked = true;
+}
+
+on(ageConsent, 'change', () => {
+  if (ageConsent.checked) {
+    localStorage.setItem('roastarena_age_consent', 'true');
+    ageWarning.classList.add('hidden');
+  } else {
+    localStorage.removeItem('roastarena_age_consent');
+  }
+});
+
+on(rulesMore, 'click', (e) => {
+  e.preventDefault();
+  e.stopPropagation(); // nu bifa checkbox-ul doar fiindcă ai apăsat pe cuvântul "regulile"
+  rulesModal.classList.remove('hidden');
+});
+on(rulesCloseBtn, 'click', () => rulesModal.classList.add('hidden'));
+
+function requireAgeConsent() {
+  if (ageConsent && !ageConsent.checked) {
+    ageWarning.classList.remove('hidden');
+    return false;
+  }
+  ageWarning.classList.add('hidden');
+  return true;
+}
+
 function resetGateView() {
   quickEntryBox.classList.remove('hidden');
   accountBox.classList.remove('hidden');
@@ -244,11 +281,44 @@ async function enterArena(nick, uid, isAccount) {
   appEl.classList.remove('hidden');
   listenRooms();
   switchRoom('general');
+  startDuelWatcher();
 }
+
+/* ---------------- NOTIFICARE DUEL (peste toate camerele) ---------------- */
+
+let pendingDuelRoom = null;
+
+function startDuelWatcher() {
+  onValue(ref(db, 'duels'), (snap) => {
+    const allDuels = snap.val() || {};
+    pendingDuelRoom = null;
+    for (const [roomId, roomDuels] of Object.entries(allDuels)) {
+      const hit = Object.values(roomDuels).some((d) => {
+        if ((d.status || 'active') !== 'active') return false;
+        if (d.challenger !== currentNick && d.opponent !== currentNick) return false;
+        const turnCount = Object.keys(d.turns || {}).length;
+        const nextSide = turnCount % 2 === 1 ? 'opponent' : 'challenger';
+        const nextNick = nextSide === 'challenger' ? d.challenger : d.opponent;
+        return nextNick === currentNick && turnCount > 0; // nu te notifica despre propriul duel proaspăt creat
+      });
+      if (hit) { pendingDuelRoom = roomId; break; }
+    }
+    duelNoticeBtn.classList.toggle('hidden', !pendingDuelRoom);
+  });
+}
+
+on(duelNoticeBtn, 'click', () => {
+  if (!pendingDuelRoom) return;
+  leaderboardView.classList.add('hidden');
+  adminView.classList.add('hidden');
+  roomView.classList.remove('hidden');
+  switchRoom(pendingDuelRoom);
+});
 
 async function tryQuickEntry(nick) {
   nick = nick.trim().slice(0, 24);
   if (!nick) return;
+  if (!requireAgeConsent()) return;
   const claimSnap = await get(ref(db, `nicknames/${nick.toLowerCase()}`));
   if (claimSnap.exists()) {
     nickTakenWarning.classList.remove('hidden');
@@ -324,6 +394,7 @@ on(emailAuthBtn, 'click', async () => {
   const password = passwordInput.value;
   authError.classList.add('hidden');
   if (!email || !password) return;
+  if (!requireAgeConsent()) return;
   try {
     if (authMode === 'signup') {
       await createUserWithEmailAndPassword(auth, email, password);
@@ -358,6 +429,7 @@ on(forgotPasswordLink, 'click', async (e) => {
 
 on(googleBtn, 'click', async () => {
   authError.classList.add('hidden');
+  if (!requireAgeConsent()) return;
   try {
     await signInWithPopup(auth, new GoogleAuthProvider());
   } catch (err) {
@@ -453,8 +525,8 @@ function switchRoom(roomId) {
 /* ---------------- MESSAGES + DUELS FEED ---------------- */
 
 function listenFeed(roomId) {
-  const msgsRef = query(ref(db, `messages/${roomId}`), orderByChild('ts'));
-  const duelsRef = query(ref(db, `duels/${roomId}`), orderByChild('ts'));
+  const msgsRef = query(ref(db, `messages/${roomId}`), orderByChild('ts'), limitToLast(150));
+  const duelsRef = query(ref(db, `duels/${roomId}`), orderByChild('ts'), limitToLast(40));
 
   let messages = {};
   let duels = {};
@@ -545,66 +617,105 @@ async function toggleVote(roomId, id, alreadyVoted) {
 function renderDuel(roomId, id, d) {
   const el = document.createElement('div');
   el.className = 'duel';
-  const cVotes = d.challengerVotes || 0;
-  const oVotes = d.opponentVotes || 0;
-  const myVote = (d.voters || {})[currentUid];
-  const hasOpponentReply = !!d.opponentText;
+  const turns = Object.entries(d.turns || {})
+    .map(([tid, t]) => ({ tid, ...t }))
+    .sort((a, b) => (a.ts || 0) - (b.ts || 0));
+  const turnCount = turns.length;
+  const status = d.status || 'active';
+  const isParticipant = currentNick === d.challenger || currentNick === d.opponent;
+
+  const transcriptHtml = turns.length
+    ? turns.map((t) => {
+        const nick = t.side === 'challenger' ? d.challenger : d.opponent;
+        return `<div class="duel-turn duel-turn-${t.side}"><span class="msg-nick">${escapeHtml(nick)}</span><div class="msg-text">${escapeHtml(t.text)}</div></div>`;
+      }).join('')
+    : '<p style="color:var(--text-faint); font-size:12px;">niciun mesaj încă...</p>';
 
   el.innerHTML = `
-    <div class="duel-title">⚔️ duel: ${escapeHtml(d.challenger)} vs ${escapeHtml(d.opponent)}</div>
-    <div class="duel-sides">
-      <div class="duel-side">
-        <span class="msg-nick">${escapeHtml(d.challenger)}</span>
-        <div class="msg-text">${escapeHtml(d.challengerText || '')}</div>
-        <div class="duel-vote-count">🔥 ${cVotes}</div>
-      </div>
-      <div class="duel-side">
-        <span class="msg-nick">${escapeHtml(d.opponent)}</span>
-        <div class="msg-text">${hasOpponentReply ? escapeHtml(d.opponentText) : '<span style="color:var(--text-faint)">încă n-a răspuns...</span>'}</div>
-        <div class="duel-vote-count">🔥 ${oVotes}</div>
-      </div>
-    </div>
+    <div class="duel-title">⚔️ duel: ${escapeHtml(d.challenger)} vs ${escapeHtml(d.opponent)}${status === 'closed' ? ' · <span style="color:var(--text-faint); font-weight:400;">încheiat</span>' : ''}</div>
+    <div class="duel-transcript">${transcriptHtml}</div>
   `;
 
-  const sides = el.querySelectorAll('.duel-side');
+  if (status === 'active') {
+    const nextSide = turnCount % 2 === 1 ? 'opponent' : 'challenger';
+    const nextNick = nextSide === 'challenger' ? d.challenger : d.opponent;
+    const actionsRow = document.createElement('div');
+    actionsRow.style.marginTop = '10px';
+    actionsRow.style.display = 'flex';
+    actionsRow.style.gap = '8px';
+    actionsRow.style.flexWrap = 'wrap';
 
-  if (!hasOpponentReply && d.opponent === currentNick) {
-    const replyBox = document.createElement('div');
-    replyBox.style.marginTop = '10px';
-    replyBox.style.display = 'flex';
-    replyBox.style.gap = '8px';
-    const input = document.createElement('input');
-    input.placeholder = 'răspunde la duel...';
-    input.style.flex = '1';
-    input.style.padding = '8px';
-    input.style.borderRadius = '6px';
-    input.style.border = '1px solid var(--line)';
-    input.style.background = 'var(--bg-input)';
-    input.style.color = 'var(--text)';
-    const btn = document.createElement('button');
-    btn.className = 'btn-flame small';
-    btn.textContent = 'răspunde';
-    btn.addEventListener('click', async () => {
-      const text = input.value.trim();
-      if (!text) return;
-      btn.disabled = true;
-      if (await isMessageBlocked(text)) {
-        alert('Replica ta conține limbaj interzis (ură reală, nu roast).');
-        btn.disabled = false;
-        return;
-      }
-      await update(ref(db, `duels/${roomId}/${id}`), { opponentText: text, opponentUid: currentUid });
+    if (currentNick === nextNick) {
+      const input = document.createElement('input');
+      input.placeholder = turnCount === 0 ? 'replica ta de deschidere...' : 'răspunde...';
+      input.style.flex = '1';
+      input.style.minWidth = '160px';
+      input.style.padding = '8px';
+      input.style.borderRadius = '6px';
+      input.style.border = '1px solid var(--line)';
+      input.style.background = 'var(--bg-input)';
+      input.style.color = 'var(--text)';
+      const sendTurnBtn = document.createElement('button');
+      sendTurnBtn.className = 'btn-flame small';
+      sendTurnBtn.textContent = 'trimite';
+      sendTurnBtn.addEventListener('click', async () => {
+        const text = input.value.trim();
+        if (!text) return;
+        sendTurnBtn.disabled = true;
+        if (await isMessageBlocked(text)) {
+          alert('Replica ta conține limbaj interzis (ură reală, nu roast).');
+          sendTurnBtn.disabled = false;
+          return;
+        }
+        await push(ref(db, `duels/${roomId}/${id}/turns`), { side: nextSide, uid: currentUid, text, ts: Date.now() });
+        input.value = '';
+      });
+      actionsRow.appendChild(input);
+      actionsRow.appendChild(sendTurnBtn);
+    } else if (isParticipant) {
+      const waiting = document.createElement('p');
+      waiting.style.color = 'var(--text-faint)';
+      waiting.style.fontSize = '12px';
+      waiting.textContent = `aștepți răspunsul lui ${nextNick}...`;
+      actionsRow.appendChild(waiting);
+    }
+
+    if (turnCount >= 2 && isParticipant) {
+      const closeBtn = document.createElement('button');
+      closeBtn.className = 'btn-ghost';
+      closeBtn.style.borderColor = 'var(--danger)';
+      closeBtn.style.color = 'var(--danger)';
+      closeBtn.textContent = 'închide duelul, la vot';
+      closeBtn.addEventListener('click', async () => {
+        const ok = await showConfirm('Închizi duelul aici și deschizi votul comunității?', 'închide duelul');
+        if (!ok) return;
+        await update(ref(db, `duels/${roomId}/${id}`), { status: 'closed' });
+      });
+      actionsRow.appendChild(closeBtn);
+    }
+
+    if (actionsRow.children.length) el.appendChild(actionsRow);
+  } else {
+    const myVote = (d.voters || {})[currentUid];
+    const cVotes = d.challengerVotes || 0;
+    const oVotes = d.opponentVotes || 0;
+    const voteRow = document.createElement('div');
+    voteRow.className = 'duel-sides';
+    voteRow.style.marginTop = '10px';
+    voteRow.innerHTML = `
+      <div class="duel-side ${myVote === 'challenger' ? 'duel-side-voted' : ''}" data-side="challenger" style="cursor:pointer;">
+        <span class="msg-nick">${escapeHtml(d.challenger)}</span>
+        <div class="duel-vote-count">🔥 ${cVotes}</div>
+      </div>
+      <div class="duel-side ${myVote === 'opponent' ? 'duel-side-voted' : ''}" data-side="opponent" style="cursor:pointer;">
+        <span class="msg-nick">${escapeHtml(d.opponent)}</span>
+        <div class="duel-vote-count">🔥 ${oVotes}</div>
+      </div>
+    `;
+    voteRow.querySelectorAll('.duel-side').forEach((sideEl) => {
+      sideEl.addEventListener('click', () => voteDuel(roomId, id, sideEl.dataset.side, myVote));
     });
-    replyBox.appendChild(input);
-    replyBox.appendChild(btn);
-    el.appendChild(replyBox);
-  } else if (hasOpponentReply) {
-    sides.forEach((sideEl, i) => {
-      const side = i === 0 ? 'challenger' : 'opponent';
-      sideEl.style.cursor = 'pointer';
-      if (myVote === side) sideEl.style.borderColor = 'var(--flame-1)';
-      sideEl.addEventListener('click', () => voteDuel(roomId, id, side, myVote));
-    });
+    el.appendChild(voteRow);
   }
 
   return el;
@@ -677,14 +788,20 @@ on(duelSendBtn, 'click', async () => {
   }
   lastSendAt = now;
   const duelsRef = ref(db, `duels/${currentRoom}`);
-  await push(duelsRef, {
+  const newDuelRef = push(duelsRef);
+  await set(newDuelRef, {
     challenger: currentNick,
     challengerUid: currentUid,
     opponent,
-    challengerText: opening,
-    opponentText: '',
+    status: 'active',
     challengerVotes: 0,
     opponentVotes: 0,
+    ts: Date.now(),
+  });
+  await push(ref(db, `duels/${currentRoom}/${newDuelRef.key}/turns`), {
+    side: 'challenger',
+    uid: currentUid,
+    text: opening,
     ts: Date.now(),
   });
   duelOpponent.value = '';

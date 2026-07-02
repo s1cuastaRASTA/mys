@@ -17,6 +17,12 @@
     <h1 class="logo">#injuraturi</h1>
     <p class="gate-sub">arena liberă de roast. alegi o poreclă, intri, dai cu mișto. comunitatea votează.</p>
 
+    <label class="consent-row">
+      <input type="checkbox" id="ageConsent">
+      <span>confirm că am cel puțin 16 ani și accept <span id="rulesMore">regulile</span></span>
+    </label>
+    <p id="ageWarning" class="filter-warning hidden">trebuie să bifezi asta înainte să continui.</p>
+
     <div id="quickEntryBox">
       <input id="nickInput" type="text" placeholder="poreclă (ex: NebunuDinBlocB4)" maxlength="24" autocomplete="off">
       <button id="enterBtn" class="btn-flame">intră rapid, fără cont</button>
@@ -49,7 +55,7 @@
       <p class="filter-warning" style="font-size:13px;">contul/sesiunea ta a fost blocată de un moderator pentru încălcarea regulilor. dacă crezi că e o greșeală, contactează administratorul platformei.</p>
     </div>
 
-    <p class="gate-rules">reguli: fără atacuri pe bază de rasă, etnie, orientare sau dizabilitate. restul e liber. <span id="rulesMore">detalii</span></p>
+    <p class="gate-rules">fără atacuri pe bază de rasă, etnie, orientare sau dizabilitate. restul e liber.</p>
 
     <p class="gate-eyebrow" id="versionTag" style="margin-top:24px;">V 0.0.0.1</p>
   </div>
@@ -60,6 +66,7 @@
   <header class="topbar">
     <span class="logo-small">#injuraturi</span>
     <div class="who">
+      <button id="duelNotice" class="btn-ghost hidden" style="border-color:var(--flame-1); color:var(--ember);">⚔️ ai un duel în așteptare</button>
       <span id="whoNick" class="who-nick"></span>
       <button id="signOutBtn" class="btn-ghost hidden">deconectare</button>
       <button id="changeNick" class="btn-ghost">schimbă porecla</button>
@@ -129,7 +136,7 @@
 <div id="duelModal" class="modal hidden">
   <div class="modal-box">
     <h3>⚔️ provoacă pe cineva la duel</h3>
-    <p class="modal-sub">scrie porecla adversarului. el/ea va trebui să răspundă cu o replică, apoi comunitatea votează cine a câștigat.</p>
+    <p class="modal-sub">scrie porecla adversarului. vă puteți răspunde pe rând câte replici vreți, iar oricare din voi poate închide duelul când vreți — apoi comunitatea votează cine a câștigat.</p>
     <input id="duelOpponent" type="text" placeholder="porecla adversarului" maxlength="24">
     <input id="duelOpening" type="text" placeholder="replica ta de deschidere" maxlength="280">
     <div class="modal-actions">
@@ -146,6 +153,22 @@
     <div class="modal-actions">
       <button id="confirmCancelBtn" class="btn-ghost">anulează</button>
       <button id="confirmOkBtn" class="btn-flame">confirmă</button>
+    </div>
+  </div>
+</div>
+
+<div id="rulesModal" class="modal hidden">
+  <div class="modal-box" style="max-width:480px;">
+    <h3>📜 regulile arenei</h3>
+    <div class="modal-sub" style="text-align:left; line-height:1.8;">
+      <p><strong>Vârstă minimă:</strong> 16 ani. Limbajul de aici e dur, intenționat.</p>
+      <p><strong>Ce e liber:</strong> injurături, mișto, sarcasm, glume dure la adresa gusturilor, stilului, inteligenței cuiva — spiritul clasic de "roast".</p>
+      <p><strong>Ce e interzis:</strong> atacuri pe bază de rasă, etnie, naționalitate, religie, orientare sexuală, identitate de gen sau dizabilitate. Nu contează cum le formulezi — dacă țintesc una din categoriile astea, mesajul e blocat sau șters.</p>
+      <p><strong>Dacă cineva încalcă regulile:</strong> orice mesaj poate fi raportat (🚩). Un moderator uman verifică raportul și poate șterge mesajul și bloca definitiv autorul.</p>
+      <p><strong>Dacă ai fost blocat pe nedrept:</strong> contactează administratorul platformei (vezi footer-ul site-ului sau canalul de contact indicat de organizator).</p>
+    </div>
+    <div class="modal-actions">
+      <button id="rulesCloseBtn" class="btn-flame">am înțeles</button>
     </div>
   </div>
 </div>

@@ -95,6 +95,20 @@ input{ font-family: var(--font-mono); }
 .btn-flame:active{ transform: scale(0.98); }
 .btn-flame.small{ width:auto; padding: 8px 14px; font-size: 13px; }
 
+.consent-row{
+  display:flex;
+  align-items:flex-start;
+  gap: 8px;
+  text-align:left;
+  color: var(--text-dim);
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 4px 0 16px;
+  cursor: pointer;
+}
+.consent-row input{ margin-top: 2px; flex-shrink:0; }
+.consent-row #rulesMore{ color: var(--flame-1); text-decoration: underline dotted; cursor: pointer; }
+
 .gate-rules{
   margin-top: 18px;
   color: var(--text-faint);
@@ -273,9 +287,22 @@ input{ font-family: var(--font-mono); }
 }
 .duel-title{ color: var(--flame-1); font-size: 12px; font-weight:700; margin-bottom: 8px; letter-spacing: 0.03em; }
 .duel-sides{ display:flex; gap: 10px; }
-.duel-side{ flex:1; background: var(--bg-input); border-radius: 6px; padding: 10px; }
+.duel-side{ flex:1; background: var(--bg-input); border-radius: 6px; padding: 10px; text-align:center; }
 .duel-side .msg-nick{ display:block; margin-bottom: 4px; }
+.duel-side:hover{ background: #2a190f; }
+.duel-side.duel-side-voted{ outline: 1px solid var(--flame-1); }
 .duel-vote-count{ color: var(--text-faint); font-size: 11px; margin-top: 6px; }
+
+.duel-transcript{ display:flex; flex-direction:column; gap: 8px; }
+.duel-turn{
+  max-width: 85%;
+  background: var(--bg-input);
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+.duel-turn .msg-nick{ display:block; font-size: 12px; margin-bottom: 2px; }
+.duel-turn-challenger{ align-self: flex-start; border-left: 2px solid var(--flame-1); }
+.duel-turn-opponent{ align-self: flex-end; border-right: 2px solid var(--ember); text-align:right; }
 
 .composer{ display:flex; gap: 10px; }
 #msgInput{
